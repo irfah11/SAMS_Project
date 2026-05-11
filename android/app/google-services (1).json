@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "696960893106",
+    "project_id": "sams-7a359",
+    "storage_bucket": "sams-7a359.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:696960893106:android:a55f23412e5d9bbfaf49ab",
+        "android_client_info": {
+          "package_name": "com.example.my_first_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDNRaEm5JkpDMy0c789Ga5H6ulcv55t-fI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:696960893106:android:720aaff5a2010995af49ab",
+        "android_client_info": {
+          "package_name": "com.example.sams"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDNRaEm5JkpDMy0c789Ga5H6ulcv55t-fI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
