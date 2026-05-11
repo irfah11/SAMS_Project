@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../Manage_subject_and_Coq_registration/Lecturer/approval_reg.dart';
+
 class LecturerDrawer extends StatelessWidget {
   const LecturerDrawer({super.key});
 
@@ -52,11 +54,15 @@ class LecturerDrawer extends StatelessWidget {
                   // Approval Course Registration
                   _buildMenuItem(
                     context,
-                    Icons.book_outlined,
+                    Icons.menu_book_outlined,
                     'Approval Course Registration',
                     onTap: () {
-                      Navigator.pop(context);
-                      // Navigator.push logic for Approval screen goes here
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ApprovalReg(),
+                        ),
+                      );
                     },
                   ),
                   const Divider(
