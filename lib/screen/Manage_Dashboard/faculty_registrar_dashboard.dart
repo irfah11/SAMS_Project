@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../Manage_Menu/faculty_registrar_menu.dart';
+
 class FacultyRegistrarDashboard extends StatelessWidget {
   const FacultyRegistrarDashboard({super.key});
 
@@ -8,7 +10,7 @@ class FacultyRegistrarDashboard extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.white,
       // You can create a specific FacultyRegistrarDrawer later
-      drawer: const Drawer(),
+      drawer: const FacultyRegistrarMenu(),
       appBar: AppBar(
         backgroundColor: const Color(
           0xFFE67E33,

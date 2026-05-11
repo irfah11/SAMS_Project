@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../Manage_Menu/pusat_adab_menu.dart';
+
 class PusatAdabDashboard extends StatelessWidget {
   const PusatAdabDashboard({super.key});
 
@@ -8,7 +10,7 @@ class PusatAdabDashboard extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.white,
       // Placeholder for the Pusat Adab specific menu
-      drawer: const Drawer(),
+      drawer: const PusatAdabMenu(),
       appBar: AppBar(
         backgroundColor: const Color(
           0xFF965E5E,

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../Manage_Menu/treasury_menu.dart';
+
 class TreasuryDashboard extends StatelessWidget {
   const TreasuryDashboard({super.key});
 
@@ -8,7 +10,7 @@ class TreasuryDashboard extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.white,
       // Drawer untuk menu Treasury
-      drawer: const Drawer(),
+      drawer: const TreasuryMenu(),
       appBar: AppBar(
         // Guna warna hijau cerah mengikut imej kedua (SAMS Treasury)
         backgroundColor: const Color(0xFF4ED471),
