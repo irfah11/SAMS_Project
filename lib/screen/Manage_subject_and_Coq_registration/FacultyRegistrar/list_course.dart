@@ -53,8 +53,9 @@ class ListCourse extends StatelessWidget {
               ),
               const SizedBox(height: 15),
 
-              // Senarai Kad Kursus
+              // Senarai Kad Kursus - Sekarang menghantar 'context'
               _buildCourseCard(
+                context: context,
                 title: 'Software Engineering Practice',
                 section: '01',
                 lab: '01A , 01B',
@@ -65,6 +66,7 @@ class ListCourse extends StatelessWidget {
               ),
               const SizedBox(height: 15),
               _buildCourseCard(
+                context: context,
                 title: 'Software Evolution Maintenance',
                 section: '01',
                 lab: '01A , 01B',
@@ -80,8 +82,9 @@ class ListCourse extends StatelessWidget {
     );
   }
 
-  // Helper function untuk bina kad kursus
+  // Helper function - Ditambah 'BuildContext context' ke dalam parameter
   Widget _buildCourseCard({
+    required BuildContext context,
     required String title,
     required String section,
     required String lab,
