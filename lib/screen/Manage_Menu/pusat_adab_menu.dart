@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:sams/screen/Manage_subject_and_Coq_registration/PusatAdab/create_module_coq.dart';
+import 'package:sams/screen/Manage_subject_and_Coq_registration/PusatAdab/list_coq.dart';
 
 class PusatAdabMenu extends StatelessWidget {
   const PusatAdabMenu({super.key});
@@ -47,8 +49,25 @@ class PusatAdabMenu extends StatelessWidget {
                     style: TextStyle(fontWeight: FontWeight.w500),
                   ),
                   children: [
-                    _buildSubMenuItem('Create Course Subject'),
-                    _buildSubMenuItem('Listing Course'),
+                    // Kemas kini bahagian ini:
+                    _buildSubMenuItem('Create Course Subject', () {
+                      Navigator.pop(context); // Tutup drawer dahulu
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const CreateModuleCoQ(),
+                        ),
+                      );
+                    }),
+                    _buildSubMenuItem('Listing Course', () {
+                      Navigator.pop(context); // Tutup drawer dahulu
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ListCoQ(),
+                        ),
+                      );
+                    }),
                   ],
                 ),
 
@@ -62,7 +81,11 @@ class PusatAdabMenu extends StatelessWidget {
                     'Attendance',
                     style: TextStyle(fontWeight: FontWeight.w500),
                   ),
-                  children: [_buildSubMenuItem('View Attendance')],
+                  children: [
+                    _buildSubMenuItem('View Attendance', () {
+                      // Implementation for viewing attendance
+                    }),
+                  ],
                 ),
               ],
             ),
@@ -80,7 +103,8 @@ class PusatAdabMenu extends StatelessWidget {
     );
   }
 
-  Widget _buildSubMenuItem(String title) {
+  Widget _buildSubMenuItem(String title, VoidCallback onTap) {
+    // Tambah parameter onTap
     return Padding(
       padding: const EdgeInsets.only(left: 70.0),
       child: ListTile(
@@ -88,7 +112,7 @@ class PusatAdabMenu extends StatelessWidget {
           title,
           style: const TextStyle(fontSize: 14, color: Colors.grey),
         ),
-        onTap: () {},
+        onTap: onTap, // Gunakan parameter onTap di sini
       ),
     );
   }
