@@ -1,96 +1,102 @@
 import 'package:flutter/material.dart';
+import 'package:sams/Controller/Manage_Coq_and_Subject_Registration/RegistrationController.dart';
+import 'list_coq.dart';
 
-class DeleteCoQDialog extends StatelessWidget {
-  final String courseName;
+class DeleteCoQ extends StatelessWidget {
+  final String coqId;
+  final String activityName;
 
-  const DeleteCoQDialog({super.key, required this.courseName});
+  const DeleteCoQ({super.key, required this.coqId, required this.activityName});
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(
-          4,
-        ), // Bentuk petak seperti dalam gambar
+    final RegistrationController controller = RegistrationController();
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFE67E33),
+        title: const Text(
+          'Confirm Deletion',
+          style: TextStyle(color: Colors.black),
+        ),
+        iconTheme: const IconThemeData(color: Colors.black),
       ),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 20),
-        width: MediaQuery.of(context).size.width * 0.8,
-        child: Column(
-          mainAxisSize: MainAxisSize.min, // Saiz kotak mengikut kandungan
-          children: [
-            // 1. Ikon Pangkah Merah
-            const CircleAvatar(
-              radius: 35,
-              backgroundColor: Color(0xFFD32F2F), // Merah
-              child: Icon(Icons.close, size: 50, color: Colors.white),
-            ),
-            const SizedBox(height: 20),
-
-            // 2. Teks Tajuk
-            const Text(
-              'Confirm',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-
-            // 3. Teks Soalan
-            Text(
-              'Are you sure you want to delete this\nKo-Q subject',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey.shade700,
-                height: 1.2,
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.warning_amber_rounded,
+                size: 100,
+                color: Colors.red,
               ),
-            ),
-            const SizedBox(height: 25),
-
-            // 4. Barisan Butang (Cancel & Delete)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                // Butang Cancel (Biru)
-                SizedBox(
-                  width: 100,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF4A69FF),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+              const SizedBox(height: 20),
+              const Text(
+                'Delete this Co-Q activity?',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                activityName,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 18, color: Colors.grey),
+              ),
+              const SizedBox(height: 40),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 15),
                       ),
-                    ),
-                    child: const Text(
-                      'Cancel',
-                      style: TextStyle(color: Colors.white),
+                      child: const Text('Go Back'),
                     ),
                   ),
-                ),
-
-                // Butang Delete (Merah)
-                SizedBox(
-                  width: 100,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      // Masukkan logik delete database di sini
-                      Navigator.pop(context); // Tutup dialog
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFD32F2F),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                  const SizedBox(width: 15),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        try {
+                          await controller.deleteCoQ(coqId);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Activity successfully deleted!'),
+                              ),
+                            );
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const ListCoQ(),
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Failed to delete: $e')),
+                            );
+                          }
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                      ),
+                      child: const Text(
+                        'Yes, Delete',
+                        style: TextStyle(color: Colors.white),
                       ),
                     ),
-                    child: const Text(
-                      'Delete',
-                      style: TextStyle(color: Colors.white),
-                    ),
                   ),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

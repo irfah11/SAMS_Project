@@ -1,8 +1,10 @@
 //Controller for faculty registrar Manage the subject(CRUD)
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:sams/Domain/module_coq.dart' show ModuleCoQ;
 import '../../Domain/course_subject.dart';
 import '../../Domain/lecturer.dart';
+import 'package:sams/Domain/module_coq.dart';
 
 class RegistrationController {
   // Instance untuk berhubung dengan Firebase Firestore
@@ -72,6 +74,38 @@ class RegistrationController {
       print("Course Subject bertipe ID $subjectId successfully deleted!");
     } catch (e) {
       print("Error , failed to delete course subject: $e");
+      rethrow;
+    }
+  }
+
+  //Pusat adab CRUD untuk pusat adab register coq
+
+  // CREATE: Tambah aktiviti CoQ baharu
+  Future<void> createCoQ(ModuleCoQ coq) async {
+    try {
+      await _db.collection('module_coq').doc(coq.coqId).set(coq.toFirebase());
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // UPDATE: Kemas kini data aktiviti CoQ sedia ada
+  Future<void> updateCoQ(ModuleCoQ coq) async {
+    try {
+      await _db
+          .collection('module_coq')
+          .doc(coq.coqId)
+          .update(coq.toFirebase());
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // DELETE: Padam aktiviti CoQ
+  Future<void> deleteCoQ(String coqId) async {
+    try {
+      await _db.collection('module_coq').doc(coqId).delete();
+    } catch (e) {
       rethrow;
     }
   }
