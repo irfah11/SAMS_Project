@@ -1,9 +1,133 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
+import 'package:sams/Controller/Manage_Coq_and_Subject_Registration/RegistrationController.dart';
+import 'package:sams/Domain/course_subject.dart';
+import 'list_course.dart';
 
-class EditCourse extends StatelessWidget {
-  final String courseName;
-  // Kita tambah parameter supaya data dari List tadi boleh dibawa masuk ke sini
-  const EditCourse({super.key, required this.courseName});
+class EditCourse extends StatefulWidget {
+  final CourseSubject course; // Menerima data asal daripada senarai
+
+  const EditCourse({super.key, required this.course});
+
+  @override
+  State<EditCourse> createState() => _EditCourseState();
+}
+
+class _EditCourseState extends State<EditCourse> {
+  // Isytihar Controller
+  late TextEditingController _idController;
+  late TextEditingController _nameController;
+  late TextEditingController _sectionController;
+  late TextEditingController _labController;
+  late TextEditingController _capacityController;
+  late TextEditingController _timeController;
+
+  String? _selectedLecturerName;
+  DateTime? _selectedDateTime;
+
+  final RegistrationController _controller = RegistrationController();
+
+  @override
+  void navigatorInit() {} // Sesuai dengan amalan anda
+
+  @override
+  void initState() {
+    super.initState();
+    // Isi kotak input secara automatik dengan data sedia ada
+    _idController = TextEditingController(text: widget.course.subjectId);
+    _nameController = TextEditingController(text: widget.course.subjectName);
+    _sectionController = TextEditingController(text: widget.course.section);
+    _labController = TextEditingController(text: widget.course.tutorialLab);
+    _capacityController = TextEditingController(
+      text: widget.course.capacity.toString(),
+    );
+    _timeController = TextEditingController(
+      text: DateFormat('yyyy-MM-dd HH:mm').format(widget.course.time),
+    );
+
+    _selectedDateTime = widget.course.time;
+    _selectedLecturerName = widget.course.lecturerName;
+  }
+
+  Future<void> _pickDateTime() async {
+    DateTime? pickedDate = await showDatePicker(
+      context: context,
+      initialDate: _selectedDateTime ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
+    );
+
+    if (pickedDate != null) {
+      TimeOfDay? pickedTime = await showTimePicker(
+        // ignore: use_build_context_synchronously
+        context: context,
+        initialTime: TimeOfDay.fromDateTime(
+          _selectedDateTime ?? DateTime.now(),
+        ),
+      );
+
+      if (pickedTime != null) {
+        setState(() {
+          _selectedDateTime = DateTime(
+            pickedDate.year,
+            pickedDate.month,
+            pickedDate.day,
+            pickedTime.hour,
+            pickedTime.minute,
+          );
+          _timeController.text = DateFormat(
+            'yyyy-MM-dd HH:mm',
+          ).format(_selectedDateTime!);
+        });
+      }
+    }
+  }
+
+  void _updateForm() async {
+    if (_selectedLecturerName == null || _selectedDateTime == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Sila pastikan tarikh/masa dan nama pensyarah lengkap!',
+          ),
+        ),
+      );
+      return;
+    }
+
+    // Bina objek baharu dengan data dikemas kini
+    CourseSubject updatedCourse = CourseSubject(
+      subjectId: _idController.text, // ID dikekalkan sebagai rujukan dokumen
+      subjectName: _nameController.text,
+      section: _sectionController.text,
+      tutorialLab: _labController.text,
+      capacity: int.tryParse(_capacityController.text) ?? 0,
+      time: _selectedDateTime!,
+      lecturerName: _selectedLecturerName!,
+    );
+
+    try {
+      await _controller.updateCourse(updatedCourse);
+
+      if (mounted) {
+        _showSuccessDialog(context);
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) {
+            Navigator.pop(context); // Tutup dialog
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const ListCourse()),
+            );
+          }
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Ralat: $e')));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -11,9 +135,8 @@ class EditCourse extends StatelessWidget {
       backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
         backgroundColor: const Color(0xFFE67E33),
-        elevation: 0,
         title: const Text(
-          'SAMS',
+          'Edit Course',
           style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
         ),
       ),
@@ -29,54 +152,116 @@ class EditCourse extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  const Icon(
-                    Icons.edit_note,
-                    size: 70,
-                  ), // Ikon beza sikit (Edit)
-                  const SizedBox(width: 15),
-                  const Text(
-                    'Edit\nCourse',
-                    style: TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.bold,
-                      height: 1.1,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 25),
+              _buildInputField(
+                'Subject ID',
+                _idController,
+                readOnly: true,
+              ), // ID tidak sepatutnya boleh diubah
+              _buildInputField('Subject Name', _nameController),
+              _buildInputField('Section', _sectionController),
+              _buildInputField('Lab/Tutorial', _labController),
+              _buildInputField('Capacity', _capacityController, isNumber: true),
 
-              // Form Fields (Dah ada "Value" asal)
-              _buildInputField('Subject Name', courseName),
-              _buildInputField('Section', '01'),
-              _buildInputField('Lab/Tutorial', '01A , 01B'),
-              _buildInputField('Capacity', '60'),
-              _buildInputField('Time', '2.00 pm - 4.00 pm'),
-              _buildInputField('Lecture Name', 'MUHAMMAD ZULFAHMI TOH'),
+              // Time Picker
+              Padding(
+                padding: const EdgeInsets.only(bottom: 15.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Time',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    TextField(
+                      controller: _timeController,
+                      readOnly: true,
+                      onTap: _pickDateTime,
+                      decoration: InputDecoration(
+                        suffixIcon: const Icon(Icons.calendar_month),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Dropdown Lecturer
+              Padding(
+                padding: const EdgeInsets.only(bottom: 15.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Lecturer Name',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('lecturer')
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData)
+                          return const LinearProgressIndicator();
+
+                        List<DropdownMenuItem<String>> lecturerItems = [];
+                        for (var doc in snapshot.data!.docs) {
+                          var data = doc.data() as Map<String, dynamic>;
+                          String fullName = data['full_name'] ?? 'No Name';
+                          lecturerItems.add(
+                            DropdownMenuItem(
+                              value: fullName,
+                              child: Text(fullName),
+                            ),
+                          );
+                        }
+
+                        return DropdownButtonFormField<String>(
+                          decoration: InputDecoration(
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 15,
+                            ),
+                          ),
+                          value: _selectedLecturerName,
+                          items: lecturerItems,
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedLecturerName = value;
+                            });
+                          },
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
 
               const SizedBox(height: 20),
-
-              // Button Save Changes
               SizedBox(
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: () {
-                    // Tunjuk dialog berjaya update nanti
-                    Navigator.pop(context);
-                  },
+                  onPressed: _updateForm,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(
-                      0xFF4CAF50,
-                    ), // Warna Hijau Edit
+                    backgroundColor: const Color(0xFF333333),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
                   child: const Text(
-                    'Update Changes',
+                    'Save Changes',
                     style: TextStyle(color: Colors.white, fontSize: 18),
                   ),
                 ),
@@ -88,7 +273,12 @@ class EditCourse extends StatelessWidget {
     );
   }
 
-  Widget _buildInputField(String label, String initialValue) {
+  Widget _buildInputField(
+    String label,
+    TextEditingController controller, {
+    bool isNumber = false,
+    bool readOnly = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 15.0),
       child: Column(
@@ -96,22 +286,41 @@ class EditCourse extends StatelessWidget {
         children: [
           Text(
             label,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
           ),
           const SizedBox(height: 5),
-          TextFormField(
-            initialValue: initialValue, // Dia akan automatik isi data asal
+          TextField(
+            controller: controller,
+            readOnly: readOnly,
+            keyboardType: isNumber ? TextInputType.number : TextInputType.text,
             decoration: InputDecoration(
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 15,
-                vertical: 10,
-              ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showSuccessDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.check_circle, color: Colors.green, size: 60),
+            SizedBox(height: 20),
+            Text(
+              'Update Successful',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            Text('Course details have been modified.'),
+          ],
+        ),
       ),
     );
   }

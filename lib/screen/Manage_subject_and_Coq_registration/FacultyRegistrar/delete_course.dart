@@ -1,12 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:sams/Controller/Manage_Coq_and_Subject_Registration/RegistrationController.dart';
+import 'list_course.dart';
 
 class DeleteCourse extends StatelessWidget {
+  final String subjectId; // Tambah ini untuk rujukan ID Firebase
   final String courseName;
 
-  const DeleteCourse({super.key, required this.courseName});
+  const DeleteCourse({
+    super.key,
+    required this.subjectId,
+    required this.courseName,
+  });
 
   @override
   Widget build(BuildContext context) {
+    // Isytihar Controller untuk fungsi delete
+    final RegistrationController controller = RegistrationController();
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -56,9 +66,34 @@ class DeleteCourse extends StatelessWidget {
                   const SizedBox(width: 15),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () {
-                        // Logik padam database kat sini
-                        Navigator.pop(context);
+                      onPressed: () async {
+                        try {
+                          // 1. Panggil fungsi delete dari Controller kita menggunakan subjectId
+                          await controller.deleteCourse(subjectId);
+
+                          // 2. Tunjukkan pemberitahuan ringkas
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Course successfully deleted!'),
+                              ),
+                            );
+
+                            // 3. Bawa pengguna balik terus ke list_course.dart yang dikemas kini
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const ListCourse(),
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Failed to delete: $e')),
+                            );
+                          }
+                        }
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.red,
