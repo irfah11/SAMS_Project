@@ -28,7 +28,6 @@ class _EditCourseState extends State<EditCourse> {
 
   final RegistrationController _controller = RegistrationController();
 
-  @override
   void navigatorInit() {} // Sesuai dengan amalan anda
 
   @override
