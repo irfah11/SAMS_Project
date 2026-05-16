@@ -7,38 +7,67 @@ class CreateModuleCoQ extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5), // Latar belakang kelabu lembut
+      backgroundColor: const Color(0xFFF5F5F5),
       drawer: const PusatAdabMenu(),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF965E5E),
-        elevation: 0,
-        centerTitle: true,
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu, color: Colors.black, size: 28),
-            onPressed: () => Scaffold.of(context).openDrawer(),
+
+      // ================= HEADER =================
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(70),
+        child: AppBar(
+          backgroundColor: const Color(0xFF9A6666),
+          elevation: 0,
+          automaticallyImplyLeading: false,
+          titleSpacing: 0,
+          flexibleSpace: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 15),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // LEFT SIDE (SAMS TEXT)
+                  const Text(
+                    'SAMS',
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 28,
+                      letterSpacing: 1,
+                      shadows: [
+                        Shadow(
+                          offset: Offset(2, 2),
+                          blurRadius: 0,
+                          color: Colors.black26,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // RIGHT DRAWER BUTTON
+                  Builder(
+                    builder: (context) => IconButton(
+                      icon: const Icon(
+                        Icons.menu,
+                        color: Colors.black,
+                        size: 30,
+                      ),
+                      onPressed: () {
+                        Scaffold.of(context).openDrawer();
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
-        title: const Text(
-          'SAMS',
-          style: TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.bold,
-            fontSize: 24,
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.menu, color: Colors.black, size: 28),
-            onPressed: () {},
-          ),
-        ],
       ),
+
+      // ================= BODY =================
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
           child: Container(
-            // KOTAK PUTIH UTAMA (CARD)
+            // WHITE MAIN CARD
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: Colors.white,
@@ -47,7 +76,7 @@ class CreateModuleCoQ extends StatelessWidget {
             ),
             child: Column(
               children: [
-                // 1. Bahagian Header (Ikon & Tajuk)
+                // ================= TITLE SECTION =================
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
@@ -63,7 +92,9 @@ class CreateModuleCoQ extends StatelessWidget {
                         color: Colors.black,
                       ),
                     ),
+
                     const SizedBox(width: 15),
+
                     const Expanded(
                       child: Text(
                         'Register\nCo-Q',
@@ -76,9 +107,10 @@ class CreateModuleCoQ extends StatelessWidget {
                     ),
                   ],
                 ),
+
                 const SizedBox(height: 30),
 
-                // 2. Borang Input
+                // ================= INPUT FIELDS =================
                 _buildInputField('Subject'),
                 _buildInputField('Date'),
                 _buildInputField('Time'),
@@ -88,7 +120,7 @@ class CreateModuleCoQ extends StatelessWidget {
 
                 const SizedBox(height: 20),
 
-                // 3. Butang Submit Hitam
+                // ================= SUBMIT BUTTON =================
                 SizedBox(
                   width: double.infinity,
                   height: 50,
@@ -118,7 +150,8 @@ class CreateModuleCoQ extends StatelessWidget {
     );
   }
 
-  Widget _buildInputField(String label) {
+  // ================= INPUT FIELD WIDGET =================
+  static Widget _buildInputField(String label) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 15),
       child: Column(
@@ -128,19 +161,25 @@ class CreateModuleCoQ extends StatelessWidget {
             label,
             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
           ),
+
           const SizedBox(height: 5),
+
           TextField(
             decoration: InputDecoration(
               hintText: 'Value',
+
               hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 12,
                 vertical: 12,
               ),
+
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide(color: Colors.grey.shade300),
               ),
+
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide(color: Colors.grey.shade300),

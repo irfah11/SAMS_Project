@@ -9,38 +9,65 @@ class EditCoQ extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5), // Latar belakang kelabu lembut
+      backgroundColor: const Color(0xFFF5F5F5),
       drawer: const PusatAdabMenu(),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF965E5E), // Maroon Pusat Adab
-        elevation: 0,
-        centerTitle: true,
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu, color: Colors.black, size: 28),
-            onPressed: () => Scaffold.of(context).openDrawer(),
+
+      // ================= HEADER =================
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(70),
+        child: AppBar(
+          backgroundColor: const Color(0xFF9A6666),
+          elevation: 0,
+          automaticallyImplyLeading: false,
+          titleSpacing: 0,
+          flexibleSpace: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 15),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // LEFT SIDE (ONLY LOGO)
+                  const Text(
+                    'SAMS',
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 28,
+                      letterSpacing: 1,
+                      shadows: [
+                        Shadow(
+                          offset: Offset(2, 2),
+                          blurRadius: 0,
+                          color: Colors.black26,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // RIGHT DRAWER ICON
+                  Builder(
+                    builder: (context) => IconButton(
+                      icon: const Icon(
+                        Icons.menu,
+                        color: Colors.black,
+                        size: 30,
+                      ),
+                      onPressed: () {
+                        Scaffold.of(context).openDrawer();
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
-        title: const Text(
-          'SAMS',
-          style: TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.bold,
-            fontSize: 24,
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.menu, color: Colors.black, size: 28),
-            onPressed: () {},
-          ),
-        ],
       ),
+      // ================= BODY =================
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
           child: Container(
-            // KOTAK PUTIH UTAMA (CARD)
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: Colors.white,
@@ -49,7 +76,7 @@ class EditCoQ extends StatelessWidget {
             ),
             child: Column(
               children: [
-                // 1. Bahagian Header (Ikon & Tajuk)
+                // ===== TOP TITLE =====
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
@@ -65,7 +92,9 @@ class EditCoQ extends StatelessWidget {
                         color: Colors.black,
                       ),
                     ),
+
                     const SizedBox(width: 15),
+
                     const Expanded(
                       child: Text(
                         'Edit Register\nCo-Q',
@@ -78,9 +107,10 @@ class EditCoQ extends StatelessWidget {
                     ),
                   ],
                 ),
+
                 const SizedBox(height: 30),
 
-                // 2. Borang Input
+                // ===== FORM =====
                 _buildInputField('Subject', courseName),
                 _buildInputField('Date', ''),
                 _buildInputField('Time', ''),
@@ -90,12 +120,14 @@ class EditCoQ extends StatelessWidget {
 
                 const SizedBox(height: 20),
 
-                // 3. Butang Submit Hitam
+                // ===== BUTTON =====
                 SizedBox(
                   width: double.infinity,
                   height: 50,
                   child: ElevatedButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () {
+                      Navigator.pop(context);
+                    },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF333333),
                       shape: RoundedRectangleBorder(
@@ -120,7 +152,8 @@ class EditCoQ extends StatelessWidget {
     );
   }
 
-  Widget _buildInputField(String label, String initialValue) {
+  // ================= INPUT FIELD =================
+  static Widget _buildInputField(String label, String initialValue) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 15),
       child: Column(
@@ -130,19 +163,25 @@ class EditCoQ extends StatelessWidget {
             label,
             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
           ),
+
           const SizedBox(height: 5),
+
           TextField(
             decoration: InputDecoration(
               hintText: initialValue.isEmpty ? 'Value' : initialValue,
+
               hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 12,
                 vertical: 12,
               ),
+
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide(color: Colors.grey.shade300),
               ),
+
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide(color: Colors.grey.shade300),
