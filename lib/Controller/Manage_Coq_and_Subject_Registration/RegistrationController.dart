@@ -2,6 +2,7 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:sams/Domain/module_coq.dart' show ModuleCoQ;
+import 'package:sams/Domain/registration_subject.dart';
 import '../../Domain/course_subject.dart';
 import '../../Domain/lecturer.dart';
 import 'package:sams/Domain/module_coq.dart';
@@ -106,6 +107,104 @@ class RegistrationController {
     try {
       await _db.collection('module_coq').doc(coqId).delete();
     } catch (e) {
+      rethrow;
+    }
+  }
+  // ============================================
+  // --- FUNGSI COURSE REGISTRATION (STUDENT) ---
+  // ============================================
+
+  // Hantar pendaftaran subjek baharu
+  Future<void> submitCourseRegistration(RegistrationSubject reg) async {
+    try {
+      await _db
+          .collection('course_registrations')
+          .doc(reg.regId)
+          .set(reg.toFirebase());
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // Ambil senarai pendaftaran secara real-time
+  Stream<List<RegistrationSubject>> getPendingRegistrations(String studentId) {
+    return _db
+        .collection('course_registrations')
+        .where('student_id', isEqualTo: studentId)
+        .where('status', isEqualTo: 'Pending')
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs.map((doc) {
+            var data = doc.data();
+
+            return RegistrationSubject(
+              regId: doc.id,
+              studentId: data['student_id'] is int
+                  ? data['student_id']
+                  : (int.tryParse(
+                          data['student_id'].toString().replaceAll(
+                            RegExp(r'[^0-9]'),
+                            '',
+                          ),
+                        ) ??
+                        0),
+              fullName: data['full_name'] ?? '',
+              programme: data['programme'] ?? '',
+              advisorName: data['advisor_name'] ?? '',
+              semester: data['semester'] is int
+                  ? data['semester']
+                  : (int.tryParse(data['semester'].toString()) ?? 1),
+              subjectId: data['subject_id'] ?? '',
+              subjectName: data['subject_name'] ?? '',
+              section: data['section'] ?? '',
+              tutorialLab: data['tutorial_lab'] ?? '',
+              creditHour: data['credit_hour'] is int ? data['credit_hour'] : 3,
+              status: data['status'] ?? 'Pending',
+            );
+          }).toList();
+        });
+  }
+
+  // --- FUNGSI UNTUK DROP SUBJEK (STUDENT) ---
+  Future<void> dropRegisteredCourse(String regId) async {
+    try {
+      await _db.collection('course_registrations').doc(regId).delete();
+
+      print("Pendaftaran $regId berjaya digugurkan!");
+    } catch (e) {
+      print("Ralat semasa drop subjek: $e");
+      rethrow;
+    }
+  }
+
+  // --- FUNGSI SEMAKAN SUBJEK PENDUA ---
+  Future<bool> isSubjectAlreadyRegistered(
+    String studentId,
+    String subjectId,
+  ) async {
+    try {
+      int parsedId =
+          int.tryParse(studentId.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+
+      // Semak student_id dalam bentuk String
+      var checkString = await _db
+          .collection('course_registrations')
+          .where('student_id', isEqualTo: studentId)
+          .where('subject_id', isEqualTo: subjectId)
+          .where('status', isEqualTo: 'Pending')
+          .get();
+
+      // Semak student_id dalam bentuk Integer
+      var checkInt = await _db
+          .collection('course_registrations')
+          .where('student_id', isEqualTo: parsedId)
+          .where('subject_id', isEqualTo: subjectId)
+          .where('status', isEqualTo: 'Pending')
+          .get();
+
+      return checkString.docs.isNotEmpty || checkInt.docs.isNotEmpty;
+    } catch (e) {
+      print("Ralat semasa semakan duplicate: $e");
       rethrow;
     }
   }
