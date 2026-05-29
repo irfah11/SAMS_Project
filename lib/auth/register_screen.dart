@@ -8,6 +8,7 @@ import '../screen/Manage_Dashboard/student_dashboard.dart';
 import '../screen/Manage_Dashboard/lecturer_dashboard.dart';
 import '../screen/Manage_Dashboard/faculty_registrar_dashboard.dart';
 import '../screen/Manage_Dashboard/pusat_adab_dashboard.dart';
+import '../screen/Manage_Dashboard/treasury_dashboard.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -22,6 +23,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController _passwordController = TextEditingController();
   final AuthService _authService = AuthService();
 
+  // Role selection — values match the users/{uid}.role stored in Firestore
+  // and the login screen dropdown.
+  String _selectedRole = 'student';
+  final List<String> _roles = [
+    'student',
+    'lecturer',
+    'registrar',
+    'adab',
+    'treasury',
+  ];
+
   void _register() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
@@ -33,25 +45,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    final user = await _authService.register(email, password);
+    final user = await _authService.register(email, password, _selectedRole);
 
     if (user != null) {
       if (!mounted) return;
 
-      String userRole = "Student";
       Widget nextScreen;
 
-      switch (userRole) {
-        case 'Lecturer':
+      switch (_selectedRole) {
+        case 'lecturer':
           nextScreen = const LecturerDashboard();
           break;
-        case 'Faculty Registrar':
+        case 'registrar':
           nextScreen = const FacultyRegistrarDashboard();
           break;
-        case 'Pusat Adab':
+        case 'adab':
           nextScreen = const PusatAdabDashboard();
           break;
-        case 'Student':
+        case 'treasury':
+          nextScreen = const TreasuryDashboard();
+          break;
+        case 'student':
         default:
           nextScreen = const StudentDashboard();
           break;
@@ -99,6 +113,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 border: OutlineInputBorder(),
               ),
               obscureText: true,
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              value: _selectedRole,
+              decoration: const InputDecoration(
+                labelText: 'Register As',
+                border: OutlineInputBorder(),
+              ),
+              items: _roles.map((String role) {
+                return DropdownMenuItem(
+                  value: role,
+                  child: Text(role.toUpperCase()),
+                );
+              }).toList(),
+              onChanged: (String? newValue) {
+                setState(() {
+                  _selectedRole = newValue!;
+                });
+              },
             ),
             const SizedBox(height: 24),
             ElevatedButton(onPressed: _register, child: const Text('Register')),

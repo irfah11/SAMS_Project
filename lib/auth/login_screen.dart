@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'auth_service.dart';
+import 'register_screen.dart';
 
 import 'package:sams/screen/Manage_Dashboard/treasury_dashboard.dart';
 import 'package:sams/screen/Manage_Dashboard/student_dashboard.dart';
@@ -197,7 +198,12 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 16),
               TextButton(
                 onPressed: () {
-                  // Tambah navigasi ke Register Screen jika perlu
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const RegisterScreen(),
+                    ),
+                  );
                 },
                 child: const Text("Don't have an account? Register"),
               ),

@@ -66,6 +66,16 @@ class FacultyRegistrarDashboard extends StatelessWidget {
                       width: 65,
                       height: 65,
                       fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        width: 65,
+                        height: 65,
+                        color: const Color(0xFFE0E0E0),
+                        child: const Icon(
+                          Icons.person,
+                          size: 40,
+                          color: Colors.black54,
+                        ),
+                      ),
                     ),
                   ),
                 ],

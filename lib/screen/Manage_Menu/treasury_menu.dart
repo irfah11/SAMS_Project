@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:sams/auth/auth_service.dart';
+import 'package:sams/auth/login_screen.dart';
 
 class TreasuryMenu extends StatelessWidget {
   const TreasuryMenu({super.key});
@@ -37,6 +39,27 @@ class TreasuryMenu extends StatelessWidget {
               ],
             ),
           ),
+          const Divider(height: 1, color: Color(0xFFCCCCCC)),
+          ListTile(
+            leading: const Icon(Icons.logout, color: Colors.red),
+            title: const Text(
+              'Logout',
+              style: TextStyle(
+                color: Colors.red,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            onTap: () async {
+              final navigator = Navigator.of(context);
+              await AuthService().logout();
+              navigator.pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
+                (route) => false,
+              );
+            },
+          ),
+          const SizedBox(height: 12),
         ],
       ),
     );
