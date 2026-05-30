@@ -1,54 +1,16 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:moon_design/moon_design.dart';
+import 'package:sams/Domain/fee.dart';
 
 import 'PaymentPage.dart';
 import 'TransactionPage.dart';
-
-// =============================================================
-// MODEL — Fee (Data Dictionary 3.3.7)
-// =============================================================
-class Fee {
-  final String studentId;
-  final String semesterId;
-  final double tuitionFee;
-  final double hostelFee;
-  final double medicalFee;
-  final double welfareFee;
-  final double insuranceFee;
-  final double activityFee;
-  final double totalOutstanding;
-  final String paymentStatus;
-  final String accessStatus;
-  final String dueWeek;
-
-  const Fee({
-    required this.studentId,
-    required this.semesterId,
-    required this.tuitionFee,
-    required this.hostelFee,
-    required this.medicalFee,
-    required this.welfareFee,
-    required this.insuranceFee,
-    required this.activityFee,
-    required this.totalOutstanding,
-    required this.paymentStatus,
-    required this.accessStatus,
-    required this.dueWeek,
-  });
-}
 
 // =============================================================
 // CONTROLLER — FeeController (fetch side)
 // Payment side lives in PaymentPage.dart
 // =============================================================
 class FeeController {
-  static double _toDouble(dynamic v) {
-    if (v is num) return v.toDouble();
-    if (v is String) return double.tryParse(v) ?? 0.0;
-    return 0.0;
-  }
-
   static Future<Fee> fetchCurrentFees(String studentId) async {
     final snap = await FirebaseFirestore.instance
         .collection('Fee')
@@ -60,21 +22,7 @@ class FeeController {
       throw Exception('No fee record found for $studentId');
     }
 
-    final data = snap.docs.first.data();
-    return Fee(
-      studentId: (data['student_id'] ?? studentId).toString(),
-      semesterId: (data['semester_id'] ?? '').toString(),
-      tuitionFee: _toDouble(data['tuition_fee']),
-      hostelFee: _toDouble(data['hostel_fee']),
-      medicalFee: _toDouble(data['medical_fee']),
-      welfareFee: _toDouble(data['welfare_fee']),
-      insuranceFee: _toDouble(data['insurance_fee']),
-      activityFee: _toDouble(data['activity_fee']),
-      totalOutstanding: _toDouble(data['total_outstanding']),
-      paymentStatus: (data['payment_status'] ?? 'Unpaid').toString(),
-      accessStatus: (data['access_status'] ?? 'Unblocked').toString(),
-      dueWeek: (data['due_week'] ?? '').toString(),
-    );
+    return Fee.fromFirestore(snap.docs.first);
   }
 }
 
@@ -281,7 +229,9 @@ class _FeeHighlightCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            '${fee.semesterId} · ${fee.dueWeek}',
+            fee.dueWeek.trim().isEmpty
+                ? fee.semesterId
+                : '${fee.semesterId} · ${fee.dueWeek}',
             style: const TextStyle(
               fontSize: 13,
               color: Color(0xFFE74C4C),
@@ -292,7 +242,7 @@ class _FeeHighlightCard extends StatelessWidget {
             tagSize: MoonTagSize.xs,
             backgroundColor: const Color(0xFF2E7D32),
             label: Text(
-              fee.accessStatus.toLowerCase() == 'unblocked'
+              fee.accessStatus.trim().toLowerCase().startsWith('unblock')
                   ? 'ACTIVE'
                   : 'BLOCKED',
               style: const TextStyle(

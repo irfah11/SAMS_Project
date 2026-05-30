@@ -1,8 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:flutter/material.dart';
+import 'package:sams/Domain/transaction.dart';
 
 import 'FeePage.dart'; // for SamsHeader, SectionTitle, LabelAmountRow, formatDate, formatMoney
-import 'TransactionPage.dart'; // for Transaction model
 
 // =============================================================
 // Snapshot of the data needed to render the receipt
@@ -52,7 +52,7 @@ class TransactionDetailsController {
     String studentName = '-';
     try {
       final studentQuery = await db
-          .collection('students')
+          .collection('student')
           .where('student_id', isEqualTo: tx.studentId)
           .limit(1)
           .get();

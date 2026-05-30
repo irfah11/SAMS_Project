@@ -4,6 +4,7 @@ import 'package:moon_design/moon_design.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:sams/Domain/fee.dart';
 
 import 'package:sams/screen/Fee/Student/FeePage.dart'
     show SamsHeader, formatMoney, formatDate;
@@ -57,12 +58,6 @@ class StudentFinancialRecord {
 //   sendOverdueNotification(), generatePDFReport()
 // =============================================================
 class StudentRecordController {
-  static double _d(dynamic v) {
-    if (v is num) return v.toDouble();
-    if (v is String) return double.tryParse(v) ?? 0.0;
-    return 0.0;
-  }
-
   static Future<StudentFinancialRecord> getStudentFinancialRecord(
       String studentId) async {
     final db = FirebaseFirestore.instance;
@@ -70,7 +65,7 @@ class StudentRecordController {
     // Student profile
     String fullName = '-';
     final studentSnap = await db
-        .collection('students')
+        .collection('student')
         .where('student_id', isEqualTo: studentId)
         .limit(1)
         .get();
@@ -87,45 +82,46 @@ class StudentRecordController {
     if (feeSnap.docs.isEmpty) {
       throw Exception('No fee record for $studentId');
     }
-    final f = feeSnap.docs.first.data();
+    final fee = Fee.fromFirestore(feeSnap.docs.first);
 
-    final tuition = _d(f['tuition_fee']);
-    final medical = _d(f['medical_fee']);
-    final welfare = _d(f['welfare_fee']);
-    final insurance = _d(f['insurance_fee']);
-    final activity = _d(f['activity_fee']);
-    final hostel = _d(f['hostel_fee']);
-    final semesterFee =
-        tuition + medical + welfare + insurance + activity + hostel;
-    final balance = _d(f['total_outstanding']);
-    final amountPaid = (semesterFee - balance).clamp(0, double.infinity).toDouble();
+    final semesterFee = fee.tuitionFee +
+        fee.medicalFee +
+        fee.welfareFee +
+        fee.insuranceFee +
+        fee.activityFee +
+        fee.hostelFee;
+    final balance = fee.totalOutstanding;
+    final amountPaid =
+        (semesterFee - balance).clamp(0, double.infinity).toDouble();
 
     return StudentFinancialRecord(
       studentId: studentId,
       fullName: fullName,
-      semesterId: (f['semester_id'] ?? '').toString(),
+      semesterId: fee.semesterId,
       semesterFee: semesterFee,
       amountPaid: amountPaid,
       balance: balance,
-      paymentStatus: (f['payment_status'] ?? 'Unpaid').toString(),
-      accessStatus: (f['access_status'] ?? 'Unblocked').toString(),
-      tuitionFee: tuition,
-      medicalFee: medical,
-      welfareFee: welfare,
-      insuranceFee: insurance,
-      activityFee: activity,
-      hostelFee: hostel,
+      paymentStatus: fee.paymentStatus,
+      accessStatus: fee.accessStatus,
+      tuitionFee: fee.tuitionFee,
+      medicalFee: fee.medicalFee,
+      welfareFee: fee.welfareFee,
+      insuranceFee: fee.insuranceFee,
+      activityFee: fee.activityFee,
+      hostelFee: fee.hostelFee,
     );
   }
 
   /// Per SDD-REQ-308 toggleAccessStatus():
-  /// Flips access_status between Blocked / Unblocked.
+  /// Flips access_status between Blocked / Unblocked. Tolerant of legacy
+  /// values like "Unblock " (trailing space) already in Firestore.
   static Future<String> toggleAccessStatus({
     required String studentId,
     required String currentStatus,
   }) async {
-    final newStatus =
-        currentStatus.toLowerCase() == 'unblocked' ? 'Blocked' : 'Unblocked';
+    final isUnblocked =
+        currentStatus.trim().toLowerCase().startsWith('unblock');
+    final newStatus = isUnblocked ? 'Blocked' : 'Unblocked';
 
     final db = FirebaseFirestore.instance;
     final feeSnap = await db
@@ -413,7 +409,7 @@ class _StudentRecordPageState extends State<StudentRecordPage> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : Text(
-                    r.accessStatus.toLowerCase() == 'blocked'
+                    r.accessStatus.trim().toLowerCase().startsWith('block')
                         ? 'Unblock Access'
                         : 'Block Access',
                     style: const TextStyle(fontWeight: FontWeight.w700),

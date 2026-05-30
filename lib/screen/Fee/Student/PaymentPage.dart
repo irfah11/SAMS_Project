@@ -1,9 +1,18 @@
 import 'dart:convert';
+
+import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:flutter/material.dart';
+import 'package:flutter_stripe/flutter_stripe.dart' hide Card;
 import 'package:http/http.dart' as http;
 import 'package:moon_design/moon_design.dart';
+import 'package:sams/Domain/fee.dart';
+import 'package:sams/Domain/transaction.dart';
+import 'package:sams/config/billplz_config.dart';
+import 'package:sams/config/stripe_config.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'FeePage.dart';
+import 'TransactionPage.dart';
 
 // =============================================================
 // PAYMENT RESULT
@@ -18,22 +27,13 @@ class PaymentResult {
     required this.message,
     this.transactionId,
   });
-
-  factory PaymentResult.fromJson(Map<String, dynamic> json) {
-    return PaymentResult(
-      success: json['payment_success_stat'] == 'success' ||
-          json['success'] == true,
-      message: (json['message'] ?? '').toString(),
-      transactionId: json['transaction_id']?.toString(),
-    );
-  }
 }
 
 // =============================================================
-// CONTROLLER — Payment side
+// CONTROLLER — Payment side (writes to Firestore)
 // =============================================================
 class PaymentController {
-  static const String _baseUrl = 'https://api.example.com';
+  static final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   static Future<PaymentResult> processPayment({
     required String studentId,
@@ -42,36 +42,153 @@ class PaymentController {
     required String paymentMethod,
     Map<String, dynamic>? methodDetails,
   }) async {
-    final uri = Uri.parse('$_baseUrl/payments');
-    final body = jsonEncode({
-      'student_id': studentId,
-      'semester_id': semesterId,
-      'amount_paid': amount,
-      'payment_method': paymentMethod,
-      'method_details': methodDetails ?? {},
-    });
-
     try {
-      final response = await http
-          .post(
-            uri,
-            headers: const {'Content-Type': 'application/json'},
-            body: body,
-          )
-          .timeout(const Duration(seconds: 30));
+      final now = DateTime.now();
+      final transactionId = _generateTransactionId(now);
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return PaymentResult.fromJson(
-          jsonDecode(response.body) as Map<String, dynamic>,
-        );
+      final txn = Transaction(
+        transactionId: transactionId,
+        studentId: studentId,
+        semesterId: semesterId,
+        amountPaid: amount,
+        paymentMethod: paymentMethod,
+        transactionDate: now,
+        paymentSuccessStat: 'success',
+      );
+
+      // 1. Record the payment in the 'transactions' collection.
+      await _db.collection('transactions').add(txn.toFirebase());
+
+      // 2. Mark this student's fee for the semester as fully paid and
+      //    restore access. Done as a query+update so it targets the
+      //    correct Fee document regardless of its doc id.
+      final feeQuery = await _db
+          .collection('Fee')
+          .where('student_id', isEqualTo: studentId)
+          .where('semester_id', isEqualTo: semesterId)
+          .limit(1)
+          .get();
+
+      if (feeQuery.docs.isNotEmpty) {
+        await feeQuery.docs.first.reference.update({
+          'payment_status': 'Paid',
+          'access_status': 'Unblocked',
+          'total_outstanding': 0,
+        });
       }
+
       return PaymentResult(
-        success: false,
-        message: 'Server error (${response.statusCode}). Please try again.',
+        success: true,
+        message: 'Payment successful',
+        transactionId: transactionId,
       );
     } catch (e) {
-      return PaymentResult(success: false, message: 'Network error: $e');
+      return PaymentResult(success: false, message: 'Payment failed: $e');
     }
+  }
+
+  // Build a human-readable receipt number, e.g. "RP2605-43187".
+  static String _generateTransactionId(DateTime now) {
+    final yy = (now.year % 100).toString().padLeft(2, '0');
+    final mm = now.month.toString().padLeft(2, '0');
+    final seq =
+        (now.millisecondsSinceEpoch % 100000).toString().padLeft(5, '0');
+    return 'RP$yy$mm-$seq';
+  }
+}
+
+// =============================================================
+// STRIPE BACKEND HOOK
+// -------------------------------------------------------------
+// Stripe requires a PaymentIntent to be created with your SECRET key, which
+// must stay on a server (e.g. a Firebase Cloud Function). The app only ever
+// sees the resulting `client_secret`.
+//
+// TODO(backend): deploy an endpoint that does, in Node:
+//   const pi = await stripe.paymentIntents.create({
+//     amount, currency, metadata: { student_id, semester_id },
+//   });
+//   return { client_secret: pi.client_secret };
+// then set StripeConfig.createPaymentIntentUrl to its URL.
+// =============================================================
+class StripeBackend {
+  /// Returns the PaymentIntent `client_secret` for [amount] (major units, e.g.
+  /// RM 15.10). Throws a clear error until the backend URL is configured.
+  static Future<String> createPaymentIntent({
+    required double amount,
+    required String studentId,
+    required String semesterId,
+  }) async {
+    if (StripeConfig.createPaymentIntentUrl.isEmpty) {
+      throw Exception(
+        'Card payments are not live yet: no payment backend configured. '
+        'Deploy a Cloud Function that creates a Stripe PaymentIntent with your '
+        'secret key and set StripeConfig.createPaymentIntentUrl.',
+      );
+    }
+
+    final response = await http.post(
+      Uri.parse(StripeConfig.createPaymentIntentUrl),
+      headers: const {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        // Stripe expects the amount in the smallest currency unit (sen).
+        'amount': (amount * 100).round(),
+        'currency': StripeConfig.currency,
+        'student_id': studentId,
+        'semester_id': semesterId,
+      }),
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception('Backend error (${response.statusCode}): ${response.body}');
+    }
+
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final secret = data['client_secret'] ?? data['clientSecret'];
+    if (secret == null) {
+      throw Exception('Backend did not return a client_secret.');
+    }
+    return secret.toString();
+  }
+}
+
+// =============================================================
+// BILLPLZ BACKEND HOOK (FPX online banking)
+// -------------------------------------------------------------
+// Asks our backend (the `createBill` Cloud Function) to create a Billplz bill
+// with the secret key and return the hosted payment URL. The app opens that URL;
+// Billplz then notifies the backend webhook, which marks the fee paid.
+// =============================================================
+class BillplzBackend {
+  /// Returns the hosted Billplz bill URL for this student's outstanding fee.
+  /// The amount is computed server-side from the Fee document.
+  static Future<String> createBill({
+    required String studentId,
+    required String semesterId,
+  }) async {
+    if (BillplzConfig.createBillUrl.isEmpty) {
+      throw Exception(
+        'FPX is not live yet: no payment backend configured. Deploy the '
+        'createBill Cloud Function and set BillplzConfig.createBillUrl.',
+      );
+    }
+
+    final response = await http.post(
+      Uri.parse(BillplzConfig.createBillUrl),
+      headers: const {'Content-Type': 'application/json'},
+      body: jsonEncode({'student_id': studentId, 'semester_id': semesterId}),
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception('Backend error (${response.statusCode}): ${response.body}');
+    }
+
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final url = data['url'];
+    if (url == null) {
+      throw Exception('Backend did not return a bill url.');
+    }
+    return url.toString();
   }
 }
 
@@ -100,81 +217,111 @@ class PaymentPage extends StatefulWidget {
 
 class _PaymentPageState extends State<PaymentPage> {
   PaymentMethod? _selectedPaymentMethod;
-  String? _selectedBank;
-  String _paymentStatus = 'Pending';
 
-  final _cardNumberCtrl = TextEditingController();
-  final _expiryCtrl = TextEditingController();
-  final _cvvCtrl = TextEditingController();
+  // Whether Stripe's CardField currently holds a complete, valid card.
+  bool _cardComplete = false;
 
   bool _submitting = false;
 
-  static const List<String> _banks = [
-    'Maybank2U',
-    'CIMB Clicks',
-    'Public Bank',
-    'RHB Bank',
-  ];
-
-  @override
-  void dispose() {
-    _cardNumberCtrl.dispose();
-    _expiryCtrl.dispose();
-    _cvvCtrl.dispose();
-    super.dispose();
-  }
-
   void selectPaymentMethod(PaymentMethod method) {
-    setState(() {
-      _selectedPaymentMethod = method;
-      if (method == PaymentMethod.card) _selectedBank = null;
-    });
+    setState(() => _selectedPaymentMethod = method);
   }
 
   bool get _canSubmit {
     if (_submitting) return false;
     if (widget.totalOutstanding <= 0) return false;
     if (_selectedPaymentMethod == null) return false;
-    if (_selectedPaymentMethod == PaymentMethod.fpx) {
-      return _selectedBank != null;
-    }
-    return _cardNumberCtrl.text.trim().isNotEmpty &&
-        _expiryCtrl.text.trim().isNotEmpty &&
-        _cvvCtrl.text.trim().isNotEmpty;
+    // FPX → bank is chosen later on the Billplz page, so selecting it is enough.
+    if (_selectedPaymentMethod == PaymentMethod.fpx) return true;
+    return _cardComplete;
   }
 
   Future<void> processPayment() async {
     if (!_canSubmit) return;
     setState(() => _submitting = true);
 
-    final method = _selectedPaymentMethod == PaymentMethod.fpx
-        ? 'FPX'
-        : 'Credit Card';
+    try {
+      // ---- FPX → hand off to Billplz hosted page ----
+      // The Billplz webhook records the payment server-side, so we DON'T record
+      // here; we navigate to a screen that watches Firestore for the update.
+      if (_selectedPaymentMethod == PaymentMethod.fpx) {
+        await _payWithFpx();
+        return;
+      }
 
-    final details = _selectedPaymentMethod == PaymentMethod.fpx
-        ? {'bank': _selectedBank}
-        : {
-            'card_number': _cardNumberCtrl.text.trim(),
-            'expiry': _expiryCtrl.text.trim(),
-            'cvv': _cvvCtrl.text.trim(),
-          };
+      // ---- Card → charge through Stripe, then record in Firestore ----
+      await _chargeCardWithStripe();
 
-    final result = await PaymentController.processPayment(
+      final result = await PaymentController.processPayment(
+        studentId: widget.studentId,
+        semesterId: widget.semesterId,
+        amount: widget.totalOutstanding,
+        paymentMethod: 'Credit Card',
+      );
+
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      displayPaymentResult(result);
+    } on StripeException catch (e) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      displayPaymentResult(PaymentResult(
+        success: false,
+        message: e.error.localizedMessage ?? 'Card payment was declined.',
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      displayPaymentResult(PaymentResult(success: false, message: '$e'));
+    }
+  }
+
+  /// Creates a PaymentIntent on the backend, then confirms it with the card
+  /// entered in the Stripe CardField. Throws on failure (caught by caller).
+  Future<void> _chargeCardWithStripe() async {
+    final clientSecret = await StripeBackend.createPaymentIntent(
+      amount: widget.totalOutstanding,
       studentId: widget.studentId,
       semesterId: widget.semesterId,
-      amount: widget.totalOutstanding,
-      paymentMethod: method,
-      methodDetails: details,
     );
+
+    await Stripe.instance.confirmPayment(
+      paymentIntentClientSecret: clientSecret,
+      data: const PaymentMethodParams.card(
+        paymentMethodData: PaymentMethodData(),
+      ),
+    );
+  }
+
+  /// Creates a Billplz bill, opens its hosted FPX page in the browser, then
+  /// hands off to a screen that waits for the webhook to mark the fee paid.
+  Future<void> _payWithFpx() async {
+    final billUrl = await BillplzBackend.createBill(
+      studentId: widget.studentId,
+      semesterId: widget.semesterId,
+    );
+
+    final opened = await launchUrl(
+      Uri.parse(billUrl),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened) {
+      throw Exception('Could not open the FPX payment page.');
+    }
 
     if (!mounted) return;
     setState(() => _submitting = false);
-    displayPaymentResult(result);
+    Navigator.of(context).pushReplacement(MaterialPageRoute(
+      builder: (_) => FpxPendingPage(
+        studentId: widget.studentId,
+        semesterId: widget.semesterId,
+        totalOutstanding: widget.totalOutstanding,
+      ),
+    ));
   }
 
   void displayPaymentResult(PaymentResult result) {
     if (result.success) {
-      setState(() => _paymentStatus = 'Paid');
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => PaymentSuccessPage(
@@ -310,23 +457,12 @@ class _PaymentPageState extends State<PaymentPage> {
           ),
         ),
         if (selected)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(40, 0, 0, 8),
-            child: DropdownButtonFormField<String>(
-              value: _selectedBank,
-              hint: const Text('-Select Bank-'),
-              decoration: InputDecoration(
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 8),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                isDense: true,
-              ),
-              items: _banks
-                  .map((b) => DropdownMenuItem(value: b, child: Text(b)))
-                  .toList(),
-              onChanged: (v) => setState(() => _selectedBank = v),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(40, 0, 0, 8),
+            child: Text(
+              "You'll choose your bank on the secure Billplz page after you "
+              'tap Confirm payment.',
+              style: TextStyle(fontSize: 12, color: Colors.black45),
             ),
           ),
       ],
@@ -373,33 +509,23 @@ class _PaymentPageState extends State<PaymentPage> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                TextField(
-                  controller: _cardNumberCtrl,
-                  keyboardType: TextInputType.number,
-                  onChanged: (_) => setState(() {}),
-                  decoration: _fieldDecoration('Card Number'),
+                // Stripe's secure card input — raw PAN/CVC never touch our app.
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: const Color(0xFFCCCCCC)),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: CardField(
+                    onCardChanged: (card) {
+                      setState(() => _cardComplete = card?.complete ?? false);
+                    },
+                  ),
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _expiryCtrl,
-                        onChanged: (_) => setState(() {}),
-                        decoration: _fieldDecoration('Expiry date'),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: _cvvCtrl,
-                        keyboardType: TextInputType.number,
-                        obscureText: true,
-                        onChanged: (_) => setState(() {}),
-                        decoration: _fieldDecoration('CVV'),
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 6),
+                const Text(
+                  'Test card: 4242 4242 4242 4242 · any future expiry · any CVC',
+                  style: TextStyle(fontSize: 11, color: Colors.black45),
                 ),
               ],
             ),
@@ -407,14 +533,140 @@ class _PaymentPageState extends State<PaymentPage> {
       ],
     );
   }
+}
 
-  InputDecoration _fieldDecoration(String hint) {
-    return InputDecoration(
-      hintText: hint,
-      isDense: true,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+// =============================================================
+// FpxPendingPage — waits (in realtime) for the Billplz webhook to mark the
+// Fee paid, then shows success. No polling: it listens to the Fee document.
+// =============================================================
+class FpxPendingPage extends StatelessWidget {
+  final String studentId;
+  final String semesterId;
+  final double totalOutstanding;
+
+  const FpxPendingPage({
+    super.key,
+    required this.studentId,
+    required this.semesterId,
+    required this.totalOutstanding,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final stream = FirebaseFirestore.instance
+        .collection('Fee')
+        .where('student_id', isEqualTo: studentId)
+        .where('semester_id', isEqualTo: semesterId)
+        .limit(1)
+        .snapshots();
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SamsHeader(),
+            Expanded(
+              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                stream: stream,
+                builder: (context, snap) {
+                  final paid = snap.hasData &&
+                      snap.data!.docs.isNotEmpty &&
+                      (snap.data!.docs.first.data()['payment_status'] ?? '')
+                              .toString()
+                              .toLowerCase() ==
+                          'paid';
+                  return paid ? _paidView(context) : _waitingView(context);
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _waitingView(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const CircularProgressIndicator(),
+          const SizedBox(height: 24),
+          const Text(
+            'Waiting for your FPX payment…',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Complete the payment in the page that opened. This screen updates '
+            'automatically once Billplz confirms it.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: Colors.black54, height: 1.4),
+          ),
+          const SizedBox(height: 28),
+          MoonOutlinedButton(
+            buttonSize: MoonButtonSize.lg,
+            isFullWidth: true,
+            onTap: () => Navigator.of(context).pop(),
+            label: const Text('Cancel',
+                style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _paidView(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      child: Column(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: Color(0xFFEAF5EA),
+            ),
+            child: const Icon(Icons.check, color: Color(0xFF2E7D32), size: 32),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Payment Successful',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Your FPX payment for $semesterId has been received.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+                fontSize: 13, color: Colors.black87, height: 1.4),
+          ),
+          const SizedBox(height: 28),
+          MoonOutlinedButton(
+            buttonSize: MoonButtonSize.lg,
+            isFullWidth: true,
+            onTap: () => Navigator.of(context)
+                .pushReplacement(MaterialPageRoute(
+              builder: (_) => TransactionPage(studentId: studentId),
+            )),
+            label: const Text('View transactions',
+                style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+          const SizedBox(height: 12),
+          MoonOutlinedButton(
+            buttonSize: MoonButtonSize.lg,
+            isFullWidth: true,
+            onTap: () =>
+                Navigator.of(context).popUntil((route) => route.isFirst),
+            label: const Text('Done',
+                style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
     );
   }
 }

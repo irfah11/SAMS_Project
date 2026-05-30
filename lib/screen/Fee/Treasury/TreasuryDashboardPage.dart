@@ -81,7 +81,7 @@ class TreasuryController {
     // Backfill missing names from the students collection if needed.
     final missing = rows.where((r) => r.fullName.isEmpty).toList();
     if (missing.isNotEmpty) {
-      final studentSnap = await db.collection('students').get();
+      final studentSnap = await db.collection('student').get();
       final nameById = {
         for (final d in studentSnap.docs)
           (d.data()['student_id'] ?? d.id).toString():

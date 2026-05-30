@@ -41,7 +41,7 @@ class OverdueController {
     // Fetch student names in one batched read.
     final nameById = <String, String>{};
     if (ids.isNotEmpty) {
-      final studentSnap = await db.collection('students').get();
+      final studentSnap = await db.collection('student').get();
       for (final d in studentSnap.docs) {
         final sid = (d.data()['student_id'] ?? d.id).toString();
         nameById[sid] = (d.data()['full_name'] ?? '-').toString();

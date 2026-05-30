@@ -1,65 +1,9 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:flutter/material.dart';
+import 'package:sams/Domain/transaction.dart';
 
 import 'FeePage.dart'; // for SamsHeader, SectionTitle, formatDate, formatMoney
 import 'TransactionDetailsPage.dart';
-
-// =============================================================
-// MODEL — Transaction (Data Dictionary 3.3.8)
-// =============================================================
-class Transaction {
-  final String transactionId;
-  final String studentId;
-  final String semesterId;
-  final double amountPaid;
-  final String paymentMethod;
-  final DateTime transactionDate;
-  final String paymentSuccessStat;
-
-  const Transaction({
-    required this.transactionId,
-    required this.studentId,
-    required this.semesterId,
-    required this.amountPaid,
-    required this.paymentMethod,
-    required this.transactionDate,
-    required this.paymentSuccessStat,
-  });
-
-  factory Transaction.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-
-    // Handle date stored either as Firestore Timestamp or ISO string
-    DateTime parsedDate;
-    final raw = data['transaction_date'];
-    if (raw is Timestamp) {
-      parsedDate = raw.toDate();
-    } else if (raw is String) {
-      parsedDate = DateTime.tryParse(raw) ?? DateTime.now();
-    } else {
-      parsedDate = DateTime.now();
-    }
-
-    return Transaction(
-      transactionId: (data['transaction_id'] ?? doc.id).toString(),
-      studentId: (data['student_id'] ?? '').toString(),
-      semesterId: (data['semester_id'] ?? '').toString(),
-      amountPaid: (data['amount_paid'] is num)
-          ? (data['amount_paid'] as num).toDouble()
-          : 0.0,
-      paymentMethod: (data['payment_method'] ?? '').toString(),
-      transactionDate: parsedDate,
-      paymentSuccessStat: (data['payment_success_stat'] ?? '').toString(),
-    );
-  }
-
-  /// Extract the academic year part from semester_id.
-  /// "Semester 2 2025/2026" → "2025/2026"
-  String get academicYear {
-    final match = RegExp(r'(\d{4}/\d{4})').firstMatch(semesterId);
-    return match?.group(1) ?? semesterId;
-  }
-}
 
 // =============================================================
 // CONTROLLER — TransactionController
