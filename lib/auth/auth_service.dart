@@ -29,13 +29,23 @@ class AuthService {
   }
 
   // 2. FUNGSI REGISTER
-  Future<User?> register(String email, String password) async {
+  Future<User?> register(String email, String password, String role) async {
     try {
       UserCredential result = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
-      return result.user;
+
+      final user = result.user;
+      if (user != null) {
+        // Create the matching users/{uid} document so login can read the role.
+        await _firestore.collection('users').doc(user.uid).set({
+          'email': email,
+          'role': role,
+        });
+      }
+
+      return user;
     } catch (e) {
       print("Error register: $e");
       return null;
