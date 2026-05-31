@@ -175,37 +175,26 @@ class RegistrationController {
       print("Ralat semasa drop subjek: $e");
       rethrow;
     }
-  }
 
-  // --- FUNGSI SEMAKAN SUBJEK PENDUA ---
-  Future<bool> isSubjectAlreadyRegistered(
-    String studentId,
-    String subjectId,
-  ) async {
-    try {
-      int parsedId =
-          int.tryParse(studentId.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+    // --- FUNGSI SEMAKAN SUBJEK duplicate ---
+    Future<bool> isSubjectAlreadyRegistered(
+      String studentId,
+      String subjectId,
+    ) async {
+      try {
+        // Semak jika ada rekod dengan subjectId dan studentId yang sama
+        var result = await _db
+            .collection('course_registrations')
+            .where('student_id', isEqualTo: studentId)
+            .where('subject_id', isEqualTo: subjectId)
+            .where('status', isEqualTo: 'Pending')
+            .get();
 
-      // Semak student_id dalam bentuk String
-      var checkString = await _db
-          .collection('course_registrations')
-          .where('student_id', isEqualTo: studentId)
-          .where('subject_id', isEqualTo: subjectId)
-          .where('status', isEqualTo: 'Pending')
-          .get();
-
-      // Semak student_id dalam bentuk Integer
-      var checkInt = await _db
-          .collection('course_registrations')
-          .where('student_id', isEqualTo: parsedId)
-          .where('subject_id', isEqualTo: subjectId)
-          .where('status', isEqualTo: 'Pending')
-          .get();
-
-      return checkString.docs.isNotEmpty || checkInt.docs.isNotEmpty;
-    } catch (e) {
-      print("Ralat semasa semakan duplicate: $e");
-      rethrow;
+        return result.docs.isNotEmpty; // Pulangkan true jika sudah ada
+      } catch (e) {
+        print("Ralat semakan: $e");
+        return false;
+      }
     }
   }
 }
