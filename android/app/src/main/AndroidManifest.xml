@@ -2,7 +2,8 @@
     <application
         android:label="SAMS"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true"><!-- DEV ONLY: allows http:// calls to the local Firebase emulator. Remove for production (use https). -->
         <activity
             android:name=".MainActivity"
             android:exported="true"

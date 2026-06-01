@@ -18,6 +18,9 @@ class StripeConfig {
   //     the URL below, card payments will fail with a clear "backend not
   //     configured" message. FPX/online-banking will be wired separately once
   //     the Billplz key arrives.
+  // ⚠️ LOCAL EMULATOR over Wi-Fi: this is THIS PC's Wi-Fi IP. A physical phone
+  //    must be on the same Wi-Fi. The IP changes when you switch networks —
+  //    run `ipconfig` (look for the Wi-Fi IPv4) and update it here when it does.
   static const String createPaymentIntentUrl =
-      'http://10.62.107.202:5001/sams-7a359/us-central1/createPaymentIntent';
+      'http://172.25.166.82:5001/sams-7a359/us-central1/createPaymentIntent';
 }
