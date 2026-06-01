@@ -3,13 +3,14 @@ import '../../Manage_Menu/student_menu.dart';
 import 'reg_menu.dart'; // Pastikan anda mengimport fail reg_menu.dart
 
 class CourseRegDashboardScreen extends StatelessWidget {
-  const CourseRegDashboardScreen({super.key});
+  final String studentId;
+  const CourseRegDashboardScreen({super.key, this.studentId = ''});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      drawer: const StudentDrawer(),
+      drawer: StudentDrawer(studentId: studentId),
       appBar: AppBar(
         backgroundColor: const Color(0xFF5CE1E6),
         elevation: 0,

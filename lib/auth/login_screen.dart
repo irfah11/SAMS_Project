@@ -31,13 +31,16 @@ class _LoginScreenState extends State<LoginScreen> {
   ];
 
   // --- FUNGSI NAVIGASI (LAMPU ISYARAT) ---
-  void _navigateToDashboard(String role) {
+  void _navigateToDashboard(String role, String studentId) {
     switch (role) {
       case 'student':
-        // Jika awak guna reg_dashboard.dart baru, guna RegDashboard()
+        // Pass the logged-in student's id so the dashboard + Fee page load
+        // the correct student/{studentId} record.
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => StudentDashboard()),
+          MaterialPageRoute(
+            builder: (context) => StudentDashboard(studentId: studentId),
+          ),
         );
         break;
       case 'lecturer':
@@ -74,8 +77,8 @@ class _LoginScreenState extends State<LoginScreen> {
   void _handleLogin() async {
     setState(() => _isLoading = true);
 
-    // 1. Panggil fungsi AuthService untuk login & dapatkan role asal dari Firestore
-    String? firestoreRole = await _authService.loginAndGetRole(
+    // 1. Login & read the real role + linked student_id from users/{uid}.
+    final AuthResult? auth = await _authService.login(
       _emailController.text.trim(),
       _passwordController.text.trim(),
     );
@@ -83,15 +86,14 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
     setState(() => _isLoading = false);
 
-    if (firestoreRole != null) {
-      // 2. NAVIGASI: Kita guna '_selectedRole' dari Dropdown untuk memudahkan testing
-      _navigateToDashboard(_selectedRole);
+    if (auth != null) {
+      // 2. NAVIGASI: route by the REAL role stored in Firestore (not the
+      // dropdown). The dropdown is now only a visual hint.
+      _navigateToDashboard(auth.role, auth.studentId);
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            "Login Berjaya sebagai $firestoreRole. Dialihkan ke $_selectedRole.",
-          ),
+          content: Text("Login berjaya sebagai ${auth.role}."),
         ),
       );
     } else {

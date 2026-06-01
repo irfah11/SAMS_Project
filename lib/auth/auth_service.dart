@@ -1,48 +1,77 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+/// Result of a successful login.
+/// [role] decides which dashboard to open. The account's owner is identified by
+/// either [studentId] (students → student/{studentId}) or [staffId]
+/// (lecturer/registrar/adab/treasury). Exactly one is populated.
+class AuthResult {
+  final String role;
+  final String studentId;
+  final String staffId;
+
+  const AuthResult({
+    required this.role,
+    this.studentId = '',
+    this.staffId = '',
+  });
+}
+
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // 1. FUNGSI LOGIN
-  Future<String?> loginAndGetRole(String email, String password) async {
+  // 1. LOGIN — sign in, then read users/{uid} for the role + linked student_id.
+  Future<AuthResult?> login(String email, String password) async {
     try {
-      UserCredential result = await _auth.signInWithEmailAndPassword(
+      final result = await _auth.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
 
-      DocumentSnapshot userDoc = await _firestore
+      final userDoc = await _firestore
           .collection('users')
           .doc(result.user!.uid)
           .get();
 
-      if (userDoc.exists) {
-        return userDoc.get('role');
-      }
-      return null;
+      if (!userDoc.exists) return null;
+
+      final data = userDoc.data() as Map<String, dynamic>;
+      return AuthResult(
+        role: (data['role'] ?? '').toString(),
+        studentId: (data['student_id'] ?? '').toString(),
+        staffId: (data['staff_id'] ?? '').toString(),
+      );
     } catch (e) {
       print("Error login: $e");
       return null;
     }
   }
 
-  // 2. FUNGSI REGISTER
-  Future<User?> register(String email, String password, String role) async {
+  // 2. REGISTER — create the account and the matching users/{uid} document.
+  // [linkedId] is the ID the user typed: their student ID (students) or staff ID
+  // (lecturer/registrar/adab/treasury). It's stored under the right field so the
+  // login flow can tell which person this account belongs to.
+  Future<User?> register(
+    String email,
+    String password,
+    String role, {
+    String linkedId = '',
+  }) async {
     try {
-      UserCredential result = await _auth.createUserWithEmailAndPassword(
+      final result = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
 
       final user = result.user;
       if (user != null) {
-        // Create the matching users/{uid} document so login can read the role.
-        await _firestore.collection('users').doc(user.uid).set({
-          'email': email,
-          'role': role,
-        });
+        final data = <String, dynamic>{'email': email, 'role': role};
+        if (linkedId.isNotEmpty) {
+          // Students link to a student record; everyone else is staff.
+          data[role == 'student' ? 'student_id' : 'staff_id'] = linkedId;
+        }
+        await _firestore.collection('users').doc(user.uid).set(data);
       }
 
       return user;
@@ -52,7 +81,7 @@ class AuthService {
     }
   }
 
-  // 3. FUNGSI LOGOUT
+  // 3. LOGOUT
   Future<void> logout() async {
     await _auth.signOut();
   }

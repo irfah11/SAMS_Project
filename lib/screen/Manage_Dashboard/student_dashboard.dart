@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import '../Manage_Menu/student_menu.dart';
 
 class StudentDashboard extends StatelessWidget {
-  const StudentDashboard({super.key});
+  final String studentId;
+  const StudentDashboard({super.key, this.studentId = ''});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      drawer: const StudentDrawer(),
+      drawer: StudentDrawer(studentId: studentId),
       appBar: AppBar(
         backgroundColor: const Color(0xFF5CE1E6),
         elevation: 0,

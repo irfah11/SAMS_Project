@@ -8,7 +8,8 @@ import 'package:sams/auth/auth_service.dart';
 import 'package:sams/auth/login_screen.dart';
 
 class StudentDrawer extends StatelessWidget {
-  const StudentDrawer({super.key});
+  final String studentId;
+  const StudentDrawer({super.key, this.studentId = ''});
 
   @override
   Widget build(BuildContext context) {
@@ -65,7 +66,7 @@ class StudentDrawer extends StatelessWidget {
                         context,
                         MaterialPageRoute(
                           builder: (context) =>
-                              const CourseRegDashboardScreen(),
+                              CourseRegDashboardScreen(studentId: studentId),
                         ),
                       );
                     },
@@ -159,7 +160,7 @@ class StudentDrawer extends StatelessWidget {
                             context,
                             MaterialPageRoute(
                               builder: (context) =>
-                                  const FeePage(studentId: 'CB23076'),
+                                  FeePage(studentId: studentId),
                             ),
                           );
                         },
