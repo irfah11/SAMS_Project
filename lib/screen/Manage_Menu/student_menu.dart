@@ -47,7 +47,14 @@ class StudentDrawer extends StatelessWidget {
                     context,
                     Icons.home_outlined,
                     'Home',
-                    onTap: () => Navigator.pop(context),
+                    onTap: () {
+                      Navigator.pop(context); // close the drawer
+                      // Return to the dashboard (the first route after login),
+                      // popping any pages opened on top of it. If already on
+                      // the dashboard this is a no-op.
+                      Navigator.of(context)
+                          .popUntil((route) => route.isFirst);
+                    },
                   ),
                   const Divider(
                     height: 1,

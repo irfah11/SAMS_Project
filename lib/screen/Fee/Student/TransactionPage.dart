@@ -1,40 +1,13 @@
-import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:flutter/material.dart';
 import 'package:sams/Domain/transaction.dart';
+import 'package:sams/Controller/Fee/FeeController.dart';
 
 import 'FeePage.dart'; // for SamsHeader, SectionTitle, formatDate, formatMoney
 import 'TransactionDetailsPage.dart';
 
 // =============================================================
-// CONTROLLER — TransactionController
-// =============================================================
-class TransactionController {
-  static Future<List<Transaction>> fetchTransactions(String studentId) async {
-    final snapshot = await FirebaseFirestore.instance
-        .collection('transactions')
-        .where('student_id', isEqualTo: studentId)
-        .where('payment_success_stat', isEqualTo: 'success')
-        .orderBy('transaction_date', descending: true)
-        .get();
-
-    return snapshot.docs.map(Transaction.fromFirestore).toList();
-  }
-
-  /// Group transactions by academic year, preserving recency order.
-  /// Returns a list of (year, transactions) pairs.
-  static List<MapEntry<String, List<Transaction>>> groupByYear(
-    List<Transaction> txs,
-  ) {
-    final map = <String, List<Transaction>>{};
-    for (final t in txs) {
-      map.putIfAbsent(t.academicYear, () => []).add(t);
-    }
-    return map.entries.toList();
-  }
-}
-
-// =============================================================
 // BOUNDARY CLASS — TransactionPage
+// Data access lives in FeeController (lib/Controller/Fee/FeeController.dart).
 // =============================================================
 class TransactionPage extends StatefulWidget {
   final String studentId;
@@ -50,7 +23,7 @@ class _TransactionPageState extends State<TransactionPage> {
   @override
   void initState() {
     super.initState();
-    _future = TransactionController.fetchTransactions(widget.studentId);
+    _future = FeeController.fetchTransactions(widget.studentId);
   }
 
   void navigateToTransactionDetails(Transaction tx) {
@@ -93,7 +66,7 @@ class _TransactionPageState extends State<TransactionPage> {
                   }
 
                   final grouped =
-                      TransactionController.groupByYear(txs);
+                      FeeController.groupByYear(txs);
 
                   return SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),

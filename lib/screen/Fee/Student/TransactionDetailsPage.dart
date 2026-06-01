@@ -1,118 +1,13 @@
-import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:flutter/material.dart';
 import 'package:sams/Domain/transaction.dart';
+import 'package:sams/Controller/Fee/FeeController.dart';
 
 import 'FeePage.dart'; // for SamsHeader, SectionTitle, LabelAmountRow, formatDate, formatMoney
 
 // =============================================================
-// Snapshot of the data needed to render the receipt
-// (joins Transaction + Student + Fee)
-// =============================================================
-class _ReceiptData {
-  final String studentName;
-  final String studentId;
-  final String semesterId;
-  final String transactionId;
-  final DateTime date;
-  final String paymentMethod;
-
-  final double tuitionFee;
-  final double medicalFee;
-  final double welfareFee;
-  final double insuranceFee;
-  final double activityFee;
-  final double hostelFee;
-  final double totalPaid;
-
-  const _ReceiptData({
-    required this.studentName,
-    required this.studentId,
-    required this.semesterId,
-    required this.transactionId,
-    required this.date,
-    required this.paymentMethod,
-    required this.tuitionFee,
-    required this.medicalFee,
-    required this.welfareFee,
-    required this.insuranceFee,
-    required this.activityFee,
-    required this.hostelFee,
-    required this.totalPaid,
-  });
-}
-
-// =============================================================
-// CONTROLLER — fetches Student.full_name + Fee breakdown
-// =============================================================
-class TransactionDetailsController {
-  static Future<_ReceiptData> fetch(Transaction tx) async {
-    final db = FirebaseFirestore.instance;
-
-    // ---- Student (3.3.2) lookup by student_id ----
-    String studentName = '-';
-    try {
-      final studentQuery = await db
-          .collection('student')
-          .where('student_id', isEqualTo: tx.studentId)
-          .limit(1)
-          .get();
-      if (studentQuery.docs.isNotEmpty) {
-        final data = studentQuery.docs.first.data();
-        studentName = (data['full_name'] ?? '-').toString();
-      }
-    } catch (_) {
-      // ignore — fall back to "-"
-    }
-
-    // ---- Fee breakdown (3.3.7) lookup by student_id + semester_id ----
-    double tuition = 0, medical = 0, welfare = 0, insurance = 0,
-        activity = 0, hostel = 0;
-    try {
-      final feeQuery = await db
-          .collection('Fee')
-          .where('student_id', isEqualTo: tx.studentId)
-          .where('semester_id', isEqualTo: tx.semesterId)
-          .limit(1)
-          .get();
-      if (feeQuery.docs.isNotEmpty) {
-        final data = feeQuery.docs.first.data();
-        tuition   = _asDouble(data['tuition_fee']);
-        medical   = _asDouble(data['medical_fee']);
-        welfare   = _asDouble(data['welfare_fee']);
-        insurance = _asDouble(data['insurance_fee']);
-        activity  = _asDouble(data['activity_fee']);
-        hostel    = _asDouble(data['hostel_fee']);
-      }
-    } catch (_) {
-      // ignore — leave zeros
-    }
-
-    return _ReceiptData(
-      studentName: studentName,
-      studentId: tx.studentId,
-      semesterId: tx.semesterId,
-      transactionId: tx.transactionId,
-      date: tx.transactionDate,
-      paymentMethod: tx.paymentMethod,
-      tuitionFee: tuition,
-      medicalFee: medical,
-      welfareFee: welfare,
-      insuranceFee: insurance,
-      activityFee: activity,
-      hostelFee: hostel,
-      totalPaid: tx.amountPaid,
-    );
-  }
-
-  static double _asDouble(dynamic v) {
-    if (v is num) return v.toDouble();
-    if (v is String) return double.tryParse(v) ?? 0.0;
-    return 0.0;
-  }
-}
-
-// =============================================================
 // BOUNDARY CLASS — TransactionDetailsPage
+// Receipt data (Student + Fee join) is built by FeeController
+// (lib/Controller/Fee/FeeController.dart), returning a ReceiptData.
 // =============================================================
 class TransactionDetailsPage extends StatefulWidget {
   final Transaction transaction;
@@ -124,12 +19,12 @@ class TransactionDetailsPage extends StatefulWidget {
 }
 
 class _TransactionDetailsPageState extends State<TransactionDetailsPage> {
-  late Future<_ReceiptData> _future;
+  late Future<ReceiptData> _future;
 
   @override
   void initState() {
     super.initState();
-    _future = TransactionDetailsController.fetch(widget.transaction);
+    _future = FeeController.fetchReceiptData(widget.transaction);
   }
 
   @override
@@ -142,7 +37,7 @@ class _TransactionDetailsPageState extends State<TransactionDetailsPage> {
           children: [
             const SamsHeader(),
             Expanded(
-              child: FutureBuilder<_ReceiptData>(
+              child: FutureBuilder<ReceiptData>(
                 future: _future,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState != ConnectionState.done) {
@@ -163,7 +58,7 @@ class _TransactionDetailsPageState extends State<TransactionDetailsPage> {
     );
   }
 
-  Widget _buildBody(_ReceiptData r) {
+  Widget _buildBody(ReceiptData r) {
     // Display "Sem 2 2025/26" style from "Semester 2 2025/2026"
     final shortSemester = _shortSemester(r.semesterId);
 

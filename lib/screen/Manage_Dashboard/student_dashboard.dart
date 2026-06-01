@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../Manage_Menu/student_menu.dart';
 
@@ -46,14 +47,33 @@ class StudentDashboard extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Welcome Back,\nNURUL BALQIS',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                      height: 1.2,
-                      fontFamily: 'Serif',
+                  // Load the logged-in student's real name from Firestore.
+                  // The student doc is keyed by studentId (e.g. student/CB23076).
+                  Flexible(
+                    child: FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                      future: studentId.isEmpty
+                          ? null
+                          : FirebaseFirestore.instance
+                              .collection('student')
+                              .doc(studentId)
+                              .get(),
+                      builder: (context, snapshot) {
+                        String name = 'Student';
+                        if (snapshot.hasData && snapshot.data!.exists) {
+                          name = (snapshot.data!.data()?['full_name'] ?? 'Student')
+                              .toString();
+                        }
+                        return Text(
+                          'Welcome Back,\n${name.toUpperCase()}',
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black,
+                            height: 1.2,
+                            fontFamily: 'Serif',
+                          ),
+                        );
+                      },
                     ),
                   ),
                   ClipOval(

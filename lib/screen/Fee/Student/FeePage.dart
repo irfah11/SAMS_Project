@@ -1,33 +1,15 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:moon_design/moon_design.dart';
 import 'package:sams/Domain/fee.dart';
+import 'package:sams/Controller/Fee/FeeController.dart';
+import 'package:sams/screen/Manage_Menu/student_menu.dart';
 
 import 'PaymentPage.dart';
 import 'TransactionPage.dart';
 
 // =============================================================
-// CONTROLLER — FeeController (fetch side)
-// Payment side lives in PaymentPage.dart
-// =============================================================
-class FeeController {
-  static Future<Fee> fetchCurrentFees(String studentId) async {
-    final snap = await FirebaseFirestore.instance
-        .collection('Fee')
-        .where('student_id', isEqualTo: studentId)
-        .limit(1)
-        .get();
-
-    if (snap.docs.isEmpty) {
-      throw Exception('No fee record found for $studentId');
-    }
-
-    return Fee.fromFirestore(snap.docs.first);
-  }
-}
-
-// =============================================================
 // BOUNDARY CLASS — FeePage  [SDD-REQ-301]
+// Data access lives in FeeController (lib/Controller/Fee/FeeController.dart).
 // =============================================================
 class FeePage extends StatefulWidget {
   final String studentId;
@@ -67,6 +49,7 @@ class _FeePageState extends State<FeePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+      drawer: StudentDrawer(studentId: widget.studentId),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -176,7 +159,14 @@ class SamsHeader extends StatelessWidget {
             ),
           ),
           IconButton(
-            onPressed: () {},
+            // Opens the navigation drawer on pages that have one (e.g. FeePage).
+            // Safely does nothing on pages without a drawer.
+            onPressed: () {
+              final scaffold = Scaffold.maybeOf(context);
+              if (scaffold != null && scaffold.hasDrawer) {
+                scaffold.openDrawer();
+              }
+            },
             icon: const Icon(Icons.menu, color: Colors.black, size: 28),
           ),
         ],
