@@ -1,16 +1,50 @@
 import 'package:flutter/material.dart';
+import '../../auth/auth_service.dart';
+import '../../auth/login_screen.dart';
 
 class TreasuryDashboard extends StatelessWidget {
   const TreasuryDashboard({super.key});
+
+  void _logout(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await AuthService().logout();
+              if (context.mounted) {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  (route) => false,
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      // Drawer untuk menu Treasury
       drawer: const Drawer(),
       appBar: AppBar(
-        // Guna warna hijau cerah mengikut imej kedua (SAMS Treasury)
         backgroundColor: const Color(0xFF4ED471),
         elevation: 0,
         automaticallyImplyLeading: false,
@@ -24,12 +58,15 @@ class TreasuryDashboard extends StatelessWidget {
           ),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.logout, color: Colors.black),
+            tooltip: 'Logout',
+            onPressed: () => _logout(context),
+          ),
           Builder(
             builder: (context) => IconButton(
               icon: const Icon(Icons.menu, color: Colors.black, size: 32),
-              onPressed: () {
-                Scaffold.of(context).openDrawer();
-              },
+              onPressed: () => Scaffold.of(context).openDrawer(),
             ),
           ),
         ],
@@ -41,8 +78,6 @@ class TreasuryDashboard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 10),
-
-              // 1. Profile Section (Treasury Staff)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -66,16 +101,12 @@ class TreasuryDashboard extends StatelessWidget {
                   ),
                 ],
               ),
-
               const SizedBox(height: 25),
-
-              // 2. Banner Events (Sama seperti dashboard lain)
               _buildEventBanner('assets/Mobility.jpg'),
               const SizedBox(height: 15),
               _buildEventBanner('assets/LarianAmal.jpg'),
               const SizedBox(height: 15),
               _buildEventBanner('assets/Programming.jpg'),
-
               const SizedBox(height: 20),
             ],
           ),
@@ -84,7 +115,6 @@ class TreasuryDashboard extends StatelessWidget {
     );
   }
 
-  // Helper function untuk banner
   Widget _buildEventBanner(String imagePath) {
     return Container(
       width: double.infinity,
@@ -92,7 +122,7 @@ class TreasuryDashboard extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withAlpha(13),
             blurRadius: 5,
             offset: const Offset(0, 2),
           ),
@@ -103,13 +133,11 @@ class TreasuryDashboard extends StatelessWidget {
         child: Image.asset(
           imagePath,
           fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) {
-            return Container(
-              height: 150,
-              color: Colors.grey[200],
-              child: const Icon(Icons.broken_image, color: Colors.grey),
-            );
-          },
+          errorBuilder: (context, error, stackTrace) => Container(
+            height: 150,
+            color: Colors.grey[200],
+            child: const Icon(Icons.broken_image, color: Colors.grey),
+          ),
         ),
       ),
     );

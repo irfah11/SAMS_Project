@@ -149,7 +149,7 @@ class BookedCoqScreen extends StatelessWidget {
             if (canBook)
               Padding(
                 padding: const EdgeInsets.all(4.0),
-                child: Container(
+                child: SizedBox(
                   height: 30,
                   child: ElevatedButton(
                     onPressed: () {},

@@ -319,7 +319,7 @@ class _CourseRegScreenState extends State<CourseRegScreen> {
           verticalAlignment: TableCellVerticalAlignment.middle,
           child: Padding(
             padding: const EdgeInsets.all(6.0),
-            child: Container(
+            child: SizedBox(
               height: 30,
               child: ElevatedButton(
                 onPressed: () {},
@@ -366,7 +366,7 @@ class _CourseRegScreenState extends State<CourseRegScreen> {
             ),
             Padding(
               padding: const EdgeInsets.all(6.0),
-              child: Container(
+              child: SizedBox(
                 height: 38,
                 child: ElevatedButton(
                   onPressed: () {},

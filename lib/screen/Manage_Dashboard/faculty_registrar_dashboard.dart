@@ -1,18 +1,51 @@
 import 'package:flutter/material.dart';
+import '../../auth/auth_service.dart';
+import '../../auth/login_screen.dart';
 
 class FacultyRegistrarDashboard extends StatelessWidget {
   const FacultyRegistrarDashboard({super.key});
+
+  void _logout(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await AuthService().logout();
+              if (context.mounted) {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  (route) => false,
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      // You can create a specific FacultyRegistrarDrawer later
       drawer: const Drawer(),
       appBar: AppBar(
-        backgroundColor: const Color(
-          0xFFE67E33,
-        ), // Orange shade from your mockup
+        backgroundColor: const Color(0xFFE67E33),
         elevation: 0,
         automaticallyImplyLeading: false,
         title: const Text(
@@ -25,12 +58,15 @@ class FacultyRegistrarDashboard extends StatelessWidget {
           ),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.logout, color: Colors.black),
+            tooltip: 'Logout',
+            onPressed: () => _logout(context),
+          ),
           Builder(
             builder: (context) => IconButton(
               icon: const Icon(Icons.menu, color: Colors.black, size: 32),
-              onPressed: () {
-                Scaffold.of(context).openDrawer();
-              },
+              onPressed: () => Scaffold.of(context).openDrawer(),
             ),
           ),
         ],
@@ -42,8 +78,6 @@ class FacultyRegistrarDashboard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 10),
-
-              // 1. Welcome Section
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -54,8 +88,7 @@ class FacultyRegistrarDashboard extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                       color: Colors.black,
                       height: 1.2,
-                      fontFamily:
-                          'Serif', // Matches the serif look in your image
+                      fontFamily: 'Serif',
                     ),
                   ),
                   ClipOval(
@@ -68,16 +101,12 @@ class FacultyRegistrarDashboard extends StatelessWidget {
                   ),
                 ],
               ),
-
               const SizedBox(height: 25),
-
-              // 2. Promotional Banners (Images from your assets)
               _buildBannerImage('assets/Mobility.jpg'),
               const SizedBox(height: 15),
               _buildBannerImage('assets/LarianAmal.jpg'),
               const SizedBox(height: 15),
               _buildBannerImage('assets/Programming.jpg'),
-
               const SizedBox(height: 20),
             ],
           ),
@@ -86,7 +115,6 @@ class FacultyRegistrarDashboard extends StatelessWidget {
     );
   }
 
-  // Helper widget to build consistent banner images
   Widget _buildBannerImage(String assetPath) {
     return Container(
       width: double.infinity,
@@ -94,8 +122,7 @@ class FacultyRegistrarDashboard extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         boxShadow: [
           BoxShadow(
-            // ignore: deprecated_member_use
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withAlpha(25),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),

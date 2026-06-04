@@ -165,7 +165,7 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
                           sub['credit']!,
                         ),
                       )
-                      .toList(),
+                      ,
               ],
             ),
 
@@ -354,7 +354,7 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
           verticalAlignment: TableCellVerticalAlignment.middle,
           child: Padding(
             padding: const EdgeInsets.all(6.0),
-            child: Container(
+            child: SizedBox(
               height: 30,
               child: ElevatedButton(
                 onPressed: () {
@@ -412,7 +412,7 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
             ),
             Padding(
               padding: const EdgeInsets.all(6.0),
-              child: Container(
+              child: SizedBox(
                 height: 38,
                 child: ElevatedButton(
                   onPressed: () {},

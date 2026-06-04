@@ -1,8 +1,44 @@
 import 'package:flutter/material.dart';
 import '../Manage_Menu/student_menu.dart';
+import '../../auth/auth_service.dart';
+import '../../auth/login_screen.dart';
 
 class StudentDashboard extends StatelessWidget {
   const StudentDashboard({super.key});
+
+  void _logout(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await AuthService().logout();
+              if (context.mounted) {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  (route) => false,
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,12 +59,15 @@ class StudentDashboard extends StatelessWidget {
           ),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.logout, color: Colors.black),
+            tooltip: 'Logout',
+            onPressed: () => _logout(context),
+          ),
           Builder(
             builder: (context) => IconButton(
               icon: const Icon(Icons.menu, color: Colors.black, size: 32),
-              onPressed: () {
-                Scaffold.of(context).openDrawer();
-              },
+              onPressed: () => Scaffold.of(context).openDrawer(),
             ),
           ),
         ],
@@ -40,8 +79,6 @@ class StudentDashboard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 10),
-
-              // Barisan Nama Pelajar & Gambar Profil
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -65,22 +102,12 @@ class StudentDashboard extends StatelessWidget {
                   ),
                 ],
               ),
-
               const SizedBox(height: 25),
-
-              // Banner 1: Mobility To Philippines
               _buildResponsiveImage('assets/Mobility.jpg'),
-
               const SizedBox(height: 15),
-
-              // Banner 2: Zombie Quest Challenge
               _buildResponsiveImage('assets/LarianAmal.jpg'),
-
               const SizedBox(height: 15),
-
-              // Banner 3: Competitive Programming
               _buildResponsiveImage('assets/Programming.jpg'),
-
               const SizedBox(height: 20),
             ],
           ),
@@ -89,20 +116,13 @@ class StudentDashboard extends StatelessWidget {
     );
   }
 
-  // Fungsi khas untuk memastikan gambar banner muat dengan saiz skrin tanpa ralat overflow
   Widget _buildResponsiveImage(String path) {
     return Container(
-      constraints: const BoxConstraints(
-        maxWidth: 500,
-      ), // Hadkan lebar maksimum banner
+      constraints: const BoxConstraints(maxWidth: 500),
       width: double.infinity,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(6),
-        child: Image.asset(
-          path,
-          fit: BoxFit
-              .contain, // Memastikan gambar tidak terpotong dan muat mengikut saiz kotak
-        ),
+        child: Image.asset(path, fit: BoxFit.contain),
       ),
     );
   }
