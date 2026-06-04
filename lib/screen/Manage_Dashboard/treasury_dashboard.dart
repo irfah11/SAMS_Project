@@ -1,9 +1,26 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../Manage_Menu/treasury_menu.dart';
+import '../Fee/Treasury/TreasuryDashboardPage.dart'
+    show TreasuryController, DashboardStats, StudentRow;
 
-class TreasuryDashboard extends StatelessWidget {
+class TreasuryDashboard extends StatefulWidget {
   const TreasuryDashboard({super.key});
+
+  @override
+  State<TreasuryDashboard> createState() => _TreasuryDashboardState();
+}
+
+class _TreasuryDashboardState extends State<TreasuryDashboard> {
+  late Future<({DashboardStats stats, List<StudentRow> students})> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = TreasuryController.getDashboardStats();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +66,7 @@ class TreasuryDashboard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    'Welcome Back,\nNURUL BALQIS',
+                    'Welcome Back,',
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
@@ -81,12 +98,32 @@ class TreasuryDashboard extends StatelessWidget {
 
               const SizedBox(height: 25),
 
-              // 2. Banner Events (Sama seperti dashboard lain)
-              _buildEventBanner('assets/Mobility.jpg'),
-              const SizedBox(height: 15),
-              _buildEventBanner('assets/LarianAmal.jpg'),
-              const SizedBox(height: 15),
-              _buildEventBanner('assets/Programming.jpg'),
+              // 2. Fee status pie chart (Paid vs Unpaid)
+              FutureBuilder<
+                  ({DashboardStats stats, List<StudentRow> students})>(
+                future: _future,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState != ConnectionState.done) {
+                    return const SizedBox(
+                      height: 220,
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
+                  if (snapshot.hasError || !snapshot.hasData) {
+                    return SizedBox(
+                      height: 120,
+                      child: Center(
+                        child: Text('Failed to load stats: ${snapshot.error}'),
+                      ),
+                    );
+                  }
+                  final stats = snapshot.data!.stats;
+                  return _FeeStatusCard(
+                    paid: stats.paidStudents,
+                    unpaid: stats.unpaidStudents,
+                  );
+                },
+              ),
 
               const SizedBox(height: 20),
             ],
@@ -95,13 +132,28 @@ class TreasuryDashboard extends StatelessWidget {
       ),
     );
   }
+}
 
-  // Helper function untuk banner
-  Widget _buildEventBanner(String imagePath) {
+// =============================================================
+// Fee status pie chart card — Paid vs Unpaid
+// =============================================================
+class _FeeStatusCard extends StatelessWidget {
+  final int paid;
+  final int unpaid;
+  const _FeeStatusCard({required this.paid, required this.unpaid});
+
+  static const Color _paidColor = Color(0xFF52DE76);
+  static const Color _unpaidColor = Color(0xFFEF5350);
+
+  @override
+  Widget build(BuildContext context) {
+    final total = paid + unpaid;
     return Container(
       width: double.infinity,
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE0E0E0)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
@@ -110,20 +162,163 @@ class TreasuryDashboard extends StatelessWidget {
           ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: Image.asset(
-          imagePath,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) {
-            return Container(
-              height: 150,
-              color: Colors.grey[200],
-              child: const Icon(Icons.broken_image, color: Colors.grey),
-            );
-          },
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Fee Status',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: Colors.black,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              SizedBox(
+                width: 130,
+                height: 130,
+                child: CustomPaint(
+                  painter: _PiePainter(paid: paid, unpaid: unpaid),
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '$total',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const Text(
+                          'students',
+                          style: TextStyle(fontSize: 10, color: Colors.black54),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 24),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _Legend(
+                      color: _paidColor,
+                      label: 'Paid',
+                      value: paid,
+                      total: total,
+                    ),
+                    const SizedBox(height: 12),
+                    _Legend(
+                      color: _unpaidColor,
+                      label: 'Unpaid',
+                      value: unpaid,
+                      total: total,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
+}
+
+class _Legend extends StatelessWidget {
+  final Color color;
+  final String label;
+  final int value;
+  final int total;
+  const _Legend({
+    required this.color,
+    required this.label,
+    required this.value,
+    required this.total,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = total == 0 ? 0 : (value / total * 100).round();
+    return Row(
+      children: [
+        Container(
+          width: 14,
+          height: 14,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(3),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 14, color: Colors.black87),
+          ),
+        ),
+        Text(
+          '$value ($pct%)',
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Colors.black,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PiePainter extends CustomPainter {
+  final int paid;
+  final int unpaid;
+  _PiePainter({required this.paid, required this.unpaid});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromLTWH(0, 0, size.width, size.height);
+    final total = paid + unpaid;
+
+    // Empty state — draw a neutral ring so the chart isn't blank.
+    if (total == 0) {
+      canvas.drawArc(
+        rect,
+        0,
+        2 * math.pi,
+        true,
+        Paint()..color = const Color(0xFFE0E0E0),
+      );
+      _drawHole(canvas, size);
+      return;
+    }
+
+    const start = -math.pi / 2; // start at the top
+    final paidSweep = paid / total * 2 * math.pi;
+
+    canvas.drawArc(rect, start, paidSweep, true,
+        Paint()..color = _FeeStatusCard._paidColor);
+    canvas.drawArc(rect, start + paidSweep, 2 * math.pi - paidSweep, true,
+        Paint()..color = _FeeStatusCard._unpaidColor);
+
+    _drawHole(canvas, size);
+  }
+
+  // Punch a white hole to make it a donut (leaves room for the centre label).
+  void _drawHole(Canvas canvas, Size size) {
+    canvas.drawCircle(
+      Offset(size.width / 2, size.height / 2),
+      size.width * 0.28,
+      Paint()..color = Colors.white,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _PiePainter old) =>
+      old.paid != paid || old.unpaid != unpaid;
 }

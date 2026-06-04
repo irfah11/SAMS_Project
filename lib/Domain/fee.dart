@@ -17,6 +17,7 @@ class Fee {
   final String paymentStatus;
   final String accessStatus;
   final String dueWeek;
+  final DateTime? dueDate; // calendar date the fee is due (optional)
 
   const Fee({
     required this.studentId,
@@ -31,6 +32,7 @@ class Fee {
     required this.paymentStatus,
     required this.accessStatus,
     required this.dueWeek,
+    this.dueDate,
   });
 
   // Tolerant numeric parse — Firestore may store numbers as int, double or String.
@@ -38,6 +40,13 @@ class Fee {
     if (v is num) return v.toDouble();
     if (v is String) return double.tryParse(v) ?? 0.0;
     return 0.0;
+  }
+
+  // due_date may be a Firestore Timestamp, an ISO string, or absent.
+  static DateTime? _toDateOrNull(dynamic v) {
+    if (v is Timestamp) return v.toDate();
+    if (v is String && v.isNotEmpty) return DateTime.tryParse(v);
+    return null;
   }
 
   // Convert a Firestore JSON map into a Fee object.
@@ -55,6 +64,7 @@ class Fee {
       paymentStatus: (json['payment_status'] ?? 'Unpaid').toString(),
       accessStatus: (json['access_status'] ?? 'Unblock').toString(),
       dueWeek: (json['due_week'] ?? '').toString(),
+      dueDate: _toDateOrNull(json['due_date']),
     );
   }
 
@@ -78,6 +88,7 @@ class Fee {
       'payment_status': paymentStatus,
       'access_status': accessStatus,
       'due_week': dueWeek,
+      if (dueDate != null) 'due_date': Timestamp.fromDate(dueDate!),
     };
   }
 }

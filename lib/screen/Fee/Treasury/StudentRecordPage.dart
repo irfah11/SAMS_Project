@@ -5,6 +5,7 @@ import 'package:sams/Domain/fee.dart';
 
 import 'package:sams/screen/Fee/Student/FeePage.dart'
     show SamsHeader, formatMoney;
+import 'package:sams/screen/Manage_Menu/treasury_menu.dart';
 
 import 'TreasuryDashboardPage.dart' show kTreasuryGreen;
 
@@ -312,6 +313,8 @@ class _StudentRecordPageState extends State<StudentRecordPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+      // Drawer so the header's menu icon reaches the treasury navigation here.
+      drawer: const TreasuryMenu(),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

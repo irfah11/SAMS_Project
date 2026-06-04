@@ -2,7 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:moon_design/moon_design.dart';
 
+import 'package:sams/Domain/fee.dart';
 import 'package:sams/screen/Fee/Student/FeePage.dart' show SamsHeader;
+import 'package:sams/screen/Manage_Menu/treasury_menu.dart';
 
 import 'StudentRecordPage.dart';
 import 'OverdueStudent_Page.dart';
@@ -108,6 +110,70 @@ class TreasuryController {
       students: rows,
     );
   }
+
+  // ---------------------------------------------------------------
+  // DEV SEEDER — create a Fee doc for every student that lacks one.
+  // Copies the standard fee template (same values as CB23076). Safe to
+  // run repeatedly: students that already have a Fee are skipped.
+  // Returns the number of Fee docs created.
+  // TODO(dev): remove this and its dashboard button once fees are seeded.
+  // ---------------------------------------------------------------
+  static const String _seedSemesterId = 'SEMESTER 2 2025/2026';
+  static final DateTime _seedDueDate = DateTime(2026, 5, 9); // Week 5 due date
+
+  static Fee _feeTemplateFor(String studentId) => Fee(
+        studentId: studentId,
+        semesterId: _seedSemesterId,
+        tuitionFee: 660,
+        hostelFee: 650,
+        medicalFee: 50,
+        welfareFee: 30,
+        insuranceFee: 20,
+        activityFee: 100,
+        totalOutstanding: 1510,
+        paymentStatus: 'Unpaid',
+        accessStatus: 'Unblocked',
+        dueWeek: '5',
+        dueDate: _seedDueDate,
+      );
+
+  static Future<int> seedMissingFees() async {
+    final db = FirebaseFirestore.instance;
+
+    // student_ids that already have a Fee doc
+    final feeSnap = await db.collection('Fee').get();
+    final haveFee = feeSnap.docs
+        .map((d) => (d.data()['student_id'] ?? '').toString())
+        .where((s) => s.isNotEmpty)
+        .toSet();
+
+    // Backfill: give existing Fee docs a due_date if they don't have one.
+    for (final doc in feeSnap.docs) {
+      if (doc.data()['due_date'] == null) {
+        await doc.reference
+            .update({'due_date': Timestamp.fromDate(_seedDueDate)});
+      }
+    }
+
+    final studentSnap = await db.collection('student').get();
+
+    int created = 0;
+    for (final doc in studentSnap.docs) {
+      final data = doc.data();
+      final studentId = (data['student_id'] ?? doc.id).toString();
+      if (studentId.isEmpty || haveFee.contains(studentId)) continue;
+
+      // Deterministic doc id; '/' isn't allowed in a Firestore id so the
+      // semester is sanitised. Queries use the student_id field, not this id.
+      final docId = '${studentId}_SEM2_2025_2026';
+      await db
+          .collection('Fee')
+          .doc(docId)
+          .set(_feeTemplateFor(studentId).toFirebase());
+      created++;
+    }
+    return created;
+  }
 }
 
 // =============================================================
@@ -146,6 +212,26 @@ class _TreasuryDashboardPageState extends State<TreasuryDashboardPage> {
     });
   }
 
+  // DEV: tap once to create Fee docs for any students missing one.
+  Future<void> _onSeedFees() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final created = await TreasuryController.seedMissingFees();
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(created == 0
+              ? 'All students already have a fee record.'
+              : 'Created $created fee record(s).'),
+        ),
+      );
+      loadDashboardStats(); // refresh the list + counts
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text('Seeding failed: $e')));
+    }
+  }
+
   // searchStudent() — filter the visible list
   List<StudentRow> searchStudent(List<StudentRow> all) {
     final q = _searchQuery.trim().toLowerCase();
@@ -177,6 +263,8 @@ class _TreasuryDashboardPageState extends State<TreasuryDashboardPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+      // Drawer so the header's menu icon reaches the treasury navigation here.
+      drawer: const TreasuryMenu(),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -227,6 +315,19 @@ class _TreasuryDashboardPageState extends State<TreasuryDashboardPage> {
           Text(
             _currentSemester,
             style: const TextStyle(fontSize: 13, color: Colors.black87),
+          ),
+          const SizedBox(height: 12),
+
+          // DEV-ONLY: seed Fee docs for students that don't have one yet.
+          // TODO(dev): remove once all students are seeded.
+          OutlinedButton.icon(
+            onPressed: _onSeedFees,
+            icon: const Icon(Icons.bolt, size: 16),
+            label: const Text('Seed missing fees (dev)'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.deepPurple,
+              minimumSize: const Size(0, 36),
+            ),
           ),
           const SizedBox(height: 16),
 
