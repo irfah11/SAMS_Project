@@ -40,14 +40,19 @@ class FeeController {
   // TRANSACTIONS — list + grouping
   // ---------------------------------------------------------------
   static Future<List<Transaction>> fetchTransactions(String studentId) async {
+    // Two equality filters only — no orderBy, so Firestore serves this from its
+    // automatic indexes (no composite index needed). A single student's history
+    // is small, so we sort by date client-side below; this stays fast at any
+    // system scale because the result set is bounded to one student.
     final snapshot = await _db
         .collection('transactions')
         .where('student_id', isEqualTo: studentId)
         .where('payment_success_stat', isEqualTo: 'success')
-        .orderBy('transaction_date', descending: true)
         .get();
 
-    return snapshot.docs.map(Transaction.fromFirestore).toList();
+    final txs = snapshot.docs.map(Transaction.fromFirestore).toList();
+    txs.sort((a, b) => b.transactionDate.compareTo(a.transactionDate));
+    return txs;
   }
 
   /// Group transactions by academic year, preserving recency order.
