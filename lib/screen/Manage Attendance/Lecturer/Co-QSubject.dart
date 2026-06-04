@@ -30,17 +30,21 @@ class _LecturerCoQSubjectScreenState
   Future<void> _loadClasses() async {
     setState(() => _isLoading = true);
 
-    // Option B: read lecturer_id from users collection, not Firebase Auth UID
     final userDoc = await FirebaseFirestore.instance
         .collection('users')
         .doc(_uid)
         .get();
-    _lecturerId = userDoc.data()?['lecturer_id'];
+    final userData = userDoc.data() ?? {};
+
+    // lecturer_id is the numeric ID (e.g. 1002) used in course_subjects.Lecturer_id
+    // Falls back to staff_id for accounts registered via RegisterScreen
+    _lecturerId = userData['lecturer_id'] ?? userData['staff_id'];
+
+    // lecturer_name is used in module_coq.lecturer_name (no Lecturer_id field there)
+    final lecturerName = userData['name'] as String? ?? '';
 
     if (_lecturerId == null) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
       return;
     }
 
@@ -55,25 +59,27 @@ class _LecturerCoQSubjectScreenState
     for (final doc in subSnap.docs) {
       final d = doc.data();
       list.add({
-        'id': d['subject_id'] ?? doc.id,
-        'name': d['subject_name'] ?? 'Unknown Subject',
+        'id':    d['subject_id'] ?? doc.id,
+        'name':  d['subject_name'] ?? 'Unknown Subject',
         'isCoQ': false,
       });
     }
 
-    // Co-Q modules from module_coq where Lecturer_id == numeric id
-    final coqSnap = await FirebaseFirestore.instance
-        .collection('module_coq')
-        .where('Lecturer_id', isEqualTo: _lecturerId)
-        .get();
+    // Co-Q modules from module_coq where lecturer_name matches
+    if (lecturerName.isNotEmpty) {
+      final coqSnap = await FirebaseFirestore.instance
+          .collection('module_coq')
+          .where('lecturer_name', isEqualTo: lecturerName)
+          .get();
 
-    for (final doc in coqSnap.docs) {
-      final d = doc.data();
-      list.add({
-        'id': d['coq_id'] ?? doc.id,
-        'name': d['activity_name'] ?? 'Unknown Activity',
-        'isCoQ': true,
-      });
+      for (final doc in coqSnap.docs) {
+        final d = doc.data();
+        list.add({
+          'id':    d['coq_id'] ?? doc.id,
+          'name':  d['activity_name'] ?? 'Unknown Activity',
+          'isCoQ': true,
+        });
+      }
     }
 
     if (mounted) {

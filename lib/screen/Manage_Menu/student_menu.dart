@@ -2,15 +2,10 @@ import 'package:flutter/material.dart';
 import '../Manage_subject_and_Coq_registration/student/coq_list.dart';
 import '../Manage_subject_and_Coq_registration/student/reg_dashboard.dart';
 import '../Manage_subject_and_Coq_registration/student/booked_coq.dart';
-<<<<<<< HEAD
 import '../Manage Attendance/student/Co-QSubject.dart';
+import '../Fee/Student/FeePage.dart';
 import '../../auth/auth_service.dart';
 import '../../auth/login_screen.dart';
-=======
-import '../Fee/Student/FeePage.dart';
-import 'package:sams/auth/auth_service.dart';
-import 'package:sams/auth/login_screen.dart';
->>>>>>> c44662137a928681b8e4e9d44a844f925b35b28a
 
 class StudentDrawer extends StatelessWidget {
   final String studentId;
@@ -203,7 +198,6 @@ class StudentDrawer extends StatelessWidget {
                 ],
               ),
             ),
-<<<<<<< HEAD
             // Logout at bottom of drawer
             const Divider(height: 1, color: Color(0xFFCCCCCC)),
             ListTile(
@@ -213,7 +207,7 @@ class StudentDrawer extends StatelessWidget {
                 style: TextStyle(color: Colors.red, fontSize: 15),
               ),
               onTap: () {
-                Navigator.pop(context); // close drawer
+                Navigator.pop(context);
                 showDialog(
                   context: context,
                   builder: (_) => AlertDialog(
@@ -249,29 +243,6 @@ class StudentDrawer extends StatelessWidget {
               },
             ),
             const SizedBox(height: 8),
-=======
-            const Divider(height: 1, color: Color(0xFFCCCCCC)),
-            ListTile(
-              leading: const Icon(Icons.logout, color: Colors.red),
-              title: const Text(
-                'Logout',
-                style: TextStyle(
-                  color: Colors.red,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              onTap: () async {
-                final navigator = Navigator.of(context);
-                await AuthService().logout();
-                navigator.pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                  (route) => false,
-                );
-              },
-            ),
-            const SizedBox(height: 12),
->>>>>>> c44662137a928681b8e4e9d44a844f925b35b28a
           ],
         ),
       ),

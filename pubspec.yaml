@@ -20,6 +20,8 @@ dependencies:
   intl: ^0.20.2
   flutter_stripe: ^11.5.0   # Card payments (FPX via Billplz pending)
   http: ^1.2.0              # Calls our backend to create Stripe PaymentIntents
+  pdf: ^3.11.1
+  printing: ^5.13.2
 
 dev_dependencies:
   flutter_test:

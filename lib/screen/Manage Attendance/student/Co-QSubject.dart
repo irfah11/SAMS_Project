@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../../Controller/Manage Attendance/AttendanceController.dart';
 import 'ListClass.dart';
 
 class StudentCoQSubjectScreen extends StatefulWidget {
@@ -27,54 +28,23 @@ class _StudentCoQSubjectScreenState extends State<StudentCoQSubjectScreen> {
   Future<void> _loadSubjects() async {
     setState(() => _isLoading = true);
 
-    // Read student_id (matric number) from users collection
     final userDoc = await FirebaseFirestore.instance
         .collection('users')
         .doc(_uid)
         .get();
     _studentId = userDoc.data()?['student_id'] as String?;
 
-    final list = <Map<String, dynamic>>[];
-
     if (_studentId != null) {
-      // Academic subjects: course_registration where student_id == matric
-      final regSnap = await FirebaseFirestore.instance
-          .collection('course_registration')
-          .where('student_id', isEqualTo: _studentId)
-          .where('status', isEqualTo: 'Approved')
-          .get();
-
-      for (final doc in regSnap.docs) {
-        final d = doc.data();
-        list.add({
-          'id':    d['subject_id'] ?? doc.id,
-          'name':  d['subject_name'] ?? 'Unknown Subject',
-          'isCoQ': false,
+      final subjects =
+          await AttendanceController.fetchStudentSubjects(_studentId!);
+      if (mounted) {
+        setState(() {
+          _subjects = subjects;
+          _isLoading = false;
         });
       }
-
-      // Co-Q activities: coq_registration where student_id == matric
-      final coqSnap = await FirebaseFirestore.instance
-          .collection('coq_registration')
-          .where('student_id', isEqualTo: _studentId)
-          .where('status', isEqualTo: 'Active')
-          .get();
-
-      for (final doc in coqSnap.docs) {
-        final d = doc.data();
-        list.add({
-          'id':    d['coq_id'] ?? doc.id,
-          'name':  d['activity_name'] ?? 'Unknown Activity',
-          'isCoQ': true,
-        });
-      }
-    }
-
-    if (mounted) {
-      setState(() {
-        _subjects = list;
-        _isLoading = false;
-      });
+    } else {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

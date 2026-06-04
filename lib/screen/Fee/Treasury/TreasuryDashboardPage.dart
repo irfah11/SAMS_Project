@@ -5,7 +5,7 @@ import 'package:moon_design/moon_design.dart';
 import 'package:sams/screen/Fee/Student/FeePage.dart' show SamsHeader;
 
 import 'StudentRecordPage.dart';
-import 'OverdueStudentPage.dart';
+import 'OverdueStudent_Page.dart';
 
 const Color kTreasuryGreen = Color(0xFF52DE76);
 

@@ -344,55 +344,6 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
               ],
             ),
 
-<<<<<<< HEAD
-            // 5. Registration Table with Empty State Logic
-            Table(
-              border: TableBorder.all(color: Colors.grey.shade400),
-              columnWidths: const {
-                0: IntrinsicColumnWidth(),
-                1: FlexColumnWidth(4),
-                2: FlexColumnWidth(1.5),
-                3: FlexColumnWidth(1),
-                4: FlexColumnWidth(2),
-              },
-              children: [
-                _buildTableHeader(),
-                if (registeredSubjects.isEmpty)
-                  TableRow(
-                    children: [
-                      const SizedBox(),
-                      TableCell(
-                        child: Container(
-                          padding: const EdgeInsets.all(20),
-                          alignment: Alignment.center,
-                          child: const Text(
-                            "You haven't registered any subjects yet.",
-                            style: TextStyle(
-                              color: Colors.grey,
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(),
-                      const SizedBox(),
-                      const SizedBox(),
-                    ],
-                  )
-                else
-                  ...registeredSubjects
-                      .map(
-                        (sub) => _buildTableRow(
-                          sub['no']!,
-                          sub['subject']!,
-                          sub['section']!,
-                          sub['credit']!,
-                        ),
-                      )
-                      ,
-              ],
-            ),
-=======
             // 5. Real-Time Registration Table (StreamBuilder)
             StreamBuilder<List<RegistrationSubject>>(
               stream: _controller.getPendingRegistrations(currentStudentId),
@@ -403,7 +354,6 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
                     child: CircularProgressIndicator(),
                   );
                 }
->>>>>>> c44662137a928681b8e4e9d44a844f925b35b28a
 
                 var registeredList = snapshot.data ?? [];
 

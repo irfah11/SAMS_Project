@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../Controller/Manage Attendance/AttendanceController.dart';
 
 class ViewAttendanceScreen extends StatelessWidget {
   final String sessionId;
@@ -26,12 +27,7 @@ class ViewAttendanceScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Query AttendanceRecord using your Firestore field names
-    final stream = FirebaseFirestore.instance
-        .collection('AttendanceRecord')
-        .where('session_id', isEqualTo: sessionId)
-        .orderBy('student_name')
-        .snapshots();
+    final stream = AttendanceController.sessionRecordsStream(sessionId);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -87,10 +83,11 @@ class ViewAttendanceScreen extends StatelessWidget {
                     border: TableBorder.all(
                         color: Colors.grey.shade400, width: 0.5),
                     columnWidths: const {
-                      0: FlexColumnWidth(3),
-                      1: FlexColumnWidth(2.5),
-                      2: FlexColumnWidth(2),
-                      3: FlexColumnWidth(2),
+                      0: FlexColumnWidth(2.5),
+                      1: FlexColumnWidth(2),
+                      2: FlexColumnWidth(2.5),
+                      3: FlexColumnWidth(1.8),
+                      4: FlexColumnWidth(1.8),
                     },
                     children: [
                       _hdr(),
@@ -141,6 +138,7 @@ class ViewAttendanceScreen extends StatelessWidget {
         decoration: BoxDecoration(color: Color(0xFFE8EAFF)),
         children: [
           _HCell('Full Name'),
+          _HCell('Matric ID'),
           _HCell('Check-in Time'),
           _HCell('Status'),
           _HCell('Location'),
@@ -149,11 +147,11 @@ class ViewAttendanceScreen extends StatelessWidget {
 
   TableRow _row(
       BuildContext context, String recordId, Map<String, dynamic> data) {
-    final status = data['status'] as String? ?? 'Absent';
-    // Support both student_name and Student_id as display name
-    final name   = data['student_name'] as String? ??
-                   data['Student_id'] as String? ?? '-';
-    final ts     = data['check_in_time'] as Timestamp?;
+    final status   = data['status'] as String? ?? 'Absent';
+    final name     = data['student_name'] as String? ??
+                     data['Student_id'] as String? ?? '-';
+    final matricId = data['Student_id'] as String? ?? '-';
+    final ts       = data['check_in_time'] as Timestamp?;
 
     String location = '-';
     final geo = data['record_location'];
@@ -163,7 +161,6 @@ class ViewAttendanceScreen extends StatelessWidget {
     }
 
     return TableRow(children: [
-      // Tap name or status to edit
       GestureDetector(
         onTap: () => _showEditDialog(context, recordId, status, name),
         child: Container(
@@ -172,6 +169,7 @@ class ViewAttendanceScreen extends StatelessWidget {
           child: Text(name, style: const TextStyle(fontSize: 11)),
         ),
       ),
+      _DCell(matricId),
       _DCell(_fmtTs(ts)),
       TableCell(
         verticalAlignment: TableCellVerticalAlignment.middle,
@@ -231,11 +229,7 @@ class ViewAttendanceScreen extends StatelessWidget {
             ElevatedButton(
               onPressed: () async {
                 Navigator.pop(ctx);
-                // updateAttendanceRecord — update status in AttendanceRecord
-                await FirebaseFirestore.instance
-                    .collection('AttendanceRecord')
-                    .doc(recordId)
-                    .update({'status': selected});
+                await AttendanceController.updateRecordStatus(recordId, selected);
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                     content: Text(

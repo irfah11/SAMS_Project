@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../Controller/Manage Attendance/AttendanceController.dart';
 import 'ListAttendance.dart';
 
 class PusatAdabClassCoQScreen extends StatelessWidget {
@@ -25,10 +26,7 @@ class PusatAdabClassCoQScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final query = FirebaseFirestore.instance
-        .collection('AttendanceSession')
-        .where('coq_id', isEqualTo: coqId)
-        .orderBy('start_time', descending: false);
+    final query = AttendanceController.sessionsByCoQStream(coqId);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -69,7 +67,7 @@ class PusatAdabClassCoQScreen extends StatelessWidget {
             ]),
             const SizedBox(height: 20),
             StreamBuilder<QuerySnapshot>(
-              stream: query.snapshots(),
+              stream: query,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());

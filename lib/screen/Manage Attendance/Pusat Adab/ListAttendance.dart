@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../Controller/Manage Attendance/AttendanceController.dart';
 
 class PusatAdabListAttendanceScreen extends StatefulWidget {
   final String sessionId;
@@ -77,10 +78,7 @@ class _PusatAdabListAttendanceScreenState
   Future<void> _updateRecord(
       String recordId, String newStatus, String name) async {
     try {
-      await FirebaseFirestore.instance
-          .collection('AttendanceRecord')
-          .doc(recordId)
-          .update({'status': newStatus});
+      await AttendanceController.updateRecordStatus(recordId, newStatus);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Status updated to "$newStatus" for $name'),
@@ -97,11 +95,7 @@ class _PusatAdabListAttendanceScreenState
 
   @override
   Widget build(BuildContext context) {
-    final stream = FirebaseFirestore.instance
-        .collection('AttendanceRecord')
-        .where('session_id', isEqualTo: widget.sessionId)
-        .orderBy('student_name')
-        .snapshots();
+    final stream = AttendanceController.sessionRecordsStream(widget.sessionId);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -162,10 +156,11 @@ class _PusatAdabListAttendanceScreenState
                     border: TableBorder.all(
                         color: Colors.grey.shade400, width: 0.5),
                     columnWidths: const {
-                      0: FlexColumnWidth(2.5),
-                      1: FlexColumnWidth(3),
-                      2: FlexColumnWidth(2),
-                      3: FlexColumnWidth(2.5),
+                      0: FlexColumnWidth(2.2),
+                      1: FlexColumnWidth(2),
+                      2: FlexColumnWidth(2.8),
+                      3: FlexColumnWidth(1.8),
+                      4: FlexColumnWidth(2),
                     },
                     children: [
                       _hdr(),
@@ -205,7 +200,8 @@ class _PusatAdabListAttendanceScreenState
   TableRow _hdr() => const TableRow(
         decoration: BoxDecoration(color: Color(0xFFF5E6E6)),
         children: [
-          _HCell('Check-in Time'),
+          _HCell('Time & Date'),
+          _HCell('Matric ID'),
           _HCell('Full Name'),
           _HCell('Status'),
           _HCell('Location'),
@@ -214,11 +210,12 @@ class _PusatAdabListAttendanceScreenState
 
   TableRow _row(String recordId, Map<String, dynamic> data) {
     final status  = data['status'] as String? ?? 'Absent';
-    final name    = data['student_name'] as String? ??
-                    data['Student_id'] as String? ?? '-';
-    final ts      = data['check_in_time'] as Timestamp?;
-    final geo     = data['record_location'];
-    String loc    = '-';
+    final name     = data['student_name'] as String? ??
+                     data['Student_id'] as String? ?? '-';
+    final matricId = data['Student_id'] as String? ?? '-';
+    final ts       = data['check_in_time'] as Timestamp?;
+    final geo      = data['record_location'];
+    String loc     = '-';
     if (geo is GeoPoint) {
       loc = '${geo.latitude.toStringAsFixed(4)},\n'
             '${geo.longitude.toStringAsFixed(4)}';
@@ -226,6 +223,7 @@ class _PusatAdabListAttendanceScreenState
 
     return TableRow(children: [
       _DCell(_fmtTs(ts)),
+      _DCell(matricId),
       _DCell(name),
       TableCell(
         verticalAlignment: TableCellVerticalAlignment.middle,

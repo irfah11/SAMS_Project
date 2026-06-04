@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../../Controller/Manage Attendance/AttendanceController.dart';
 
 class AttendanceCheckInScreen extends StatefulWidget {
   final String sessionId;
@@ -14,7 +15,7 @@ class AttendanceCheckInScreen extends StatefulWidget {
     required this.sessionId,
     required this.sessionData,
     required this.subjectName,
-    this.studentId,
+    required this.studentId,
   });
 
   @override
@@ -53,7 +54,7 @@ class _AttendanceCheckInScreenState
     if (!_gpsEnabled) {
       _showResult(
           success: false,
-          message: 'Please enable GPS location before checking in.',
+          message: 'You are not within the class location. Attendance not recorded.',
           icon: Icons.gps_off);
       return;
     }
@@ -68,54 +69,9 @@ class _AttendanceCheckInScreenState
     setState(() => _isLoading = true);
 
     try {
-      final sessionDoc = await FirebaseFirestore.instance
-          .collection('AttendanceSession')
-          .doc(widget.sessionId)
-          .get();
-
-      if (!sessionDoc.exists) {
-        if (mounted) {
-          setState(() => _isLoading = false);
-          _showResult(
-              success: false,
-              message: 'Session not found.',
-              icon: Icons.error_outline);
-        }
-        return;
-      }
-
-      final data   = sessionDoc.data()!;
-      final code   = (data['attendance_code'] as String?)?.toUpperCase() ?? '';
-      final status = data['session_status'] as String? ?? '';
-
-      if (status != 'Active') {
-        if (mounted) {
-          setState(() => _isLoading = false);
-          _showResult(
-              success: false,
-              message: 'This session is not currently active.',
-              icon: Icons.lock_clock);
-        }
-        return;
-      }
-
-      if (entered != code) {
-        if (mounted) {
-          setState(() => _isLoading = false);
-          _showResult(
-              success: false,
-              message:
-                  'Attendance Check-In Failed.\nYou had enter the wrong code.',
-              icon: Icons.cancel_outlined);
-        }
-        return;
-      }
-
-      // Option B: use matric student_id if available, else fall back to UID
       final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
       final studentIdToWrite = widget.studentId ?? uid;
 
-      // Get student display name from users collection
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(uid)
@@ -123,42 +79,22 @@ class _AttendanceCheckInScreenState
       final studentName =
           userDoc.data()?['name'] as String? ?? studentIdToWrite;
 
-      // Student GPS location (simulated — replace with geolocator when added)
-      const GeoPoint studentLoc = GeoPoint(3.5568, 103.4268);
-
-      // Upsert AttendanceRecord using matric Student_id
-      final existing = await FirebaseFirestore.instance
-          .collection('AttendanceRecord')
-          .where('session_id', isEqualTo: widget.sessionId)
-          .where('Student_id', isEqualTo: studentIdToWrite)
-          .limit(1)
-          .get();
-
-      if (existing.docs.isEmpty) {
-        await FirebaseFirestore.instance
-            .collection('AttendanceRecord')
-            .add({
-          'session_id':      widget.sessionId,
-          'Student_id':      studentIdToWrite,  // matric (e.g. "CB23028")
-          'student_name':    studentName,
-          'check_in_time':   Timestamp.now(),
-          'status':          'Present',
-          'record_location': studentLoc,
-        });
-      } else {
-        await existing.docs.first.reference.update({
-          'status':        'Present',
-          'check_in_time': Timestamp.now(),
-        });
-      }
+      final result = await AttendanceController.checkIn(
+        sessionId:   widget.sessionId,
+        studentId:   studentIdToWrite,
+        studentName: studentName,
+        enteredCode: entered,
+      );
 
       if (mounted) {
         setState(() => _isLoading = false);
         _showResult(
-            success: true,
-            message:
-                'Attendance Check-In Successful!\nYou have been marked as Present.',
-            icon: Icons.check_circle_outline);
+          success: result.success,
+          message: result.message,
+          icon: result.success
+              ? Icons.check_circle_outline
+              : Icons.cancel_outlined,
+        );
       }
     } catch (e) {
       if (mounted) {
