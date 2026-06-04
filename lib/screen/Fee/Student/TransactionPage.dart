@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sams/Domain/transaction.dart';
 import 'package:sams/Controller/Fee/FeeController.dart';
+import 'package:sams/screen/Manage_Menu/student_menu.dart';
 
 import 'FeePage.dart'; // for SamsHeader, SectionTitle, formatDate, formatMoney
 import 'TransactionDetailsPage.dart';
@@ -38,6 +39,8 @@ class _TransactionPageState extends State<TransactionPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+      // Drawer so the header's menu icon opens the student navigation here.
+      drawer: StudentDrawer(studentId: widget.studentId),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

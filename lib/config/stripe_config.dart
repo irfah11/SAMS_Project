@@ -22,5 +22,5 @@ class StripeConfig {
   //    must be on the same Wi-Fi. The IP changes when you switch networks —
   //    run `ipconfig` (look for the Wi-Fi IPv4) and update it here when it does.
   static const String createPaymentIntentUrl =
-      'http://172.25.166.82:5001/sams-7a359/us-central1/createPaymentIntent';
+      'http://10.62.85.142:5001/sams-7a359/us-central1/createPaymentIntent';
 }

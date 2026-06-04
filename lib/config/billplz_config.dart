@@ -12,5 +12,5 @@ class BillplzConfig {
   // ⚠️ LOCAL EMULATOR over Wi-Fi: THIS PC's Wi-Fi IP (same as stripe_config).
   //    Update it (run `ipconfig` → Wi-Fi IPv4) whenever the network/IP changes.
   static const String createBillUrl =
-      'http://172.25.166.82:5001/sams-7a359/us-central1/createBill';
+      'http://10.62.85.142:5001/sams-7a359/us-central1/createBill';
 }
