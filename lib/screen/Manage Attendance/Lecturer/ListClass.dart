@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../Controller/Manage Attendance/AttendanceController.dart';
 import 'AddAttendance.dart';
 import 'EditAttendance.dart';
 import 'DeleteAttendance.dart';
@@ -36,17 +37,11 @@ class LecturerListClassScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Query AttendanceSession by numeric Lecturer_id (Option B)
-    Query query = FirebaseFirestore.instance
-        .collection('AttendanceSession')
-        .where('Lecturer_id', isEqualTo: lecturerId)
-        .orderBy('start_time', descending: false);
-
-    if (subjectId != null) {
-      query = query.where('subject_id', isEqualTo: subjectId);
-    } else if (coqId != null) {
-      query = query.where('coq_id', isEqualTo: coqId);
-    }
+    final stream = AttendanceController.lecturerSessionsStream(
+      lecturerId: lecturerId,
+      subjectId: subjectId,
+      coqId: coqId,
+    );
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -116,7 +111,7 @@ class LecturerListClassScreen extends StatelessWidget {
             const SizedBox(height: 20),
 
             StreamBuilder<QuerySnapshot>(
-              stream: query.snapshots(),
+              stream: stream,
               builder: (context, snap) {
                 if (snap.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());

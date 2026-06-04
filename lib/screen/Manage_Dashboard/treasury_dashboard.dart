@@ -45,12 +45,7 @@ class TreasuryDashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-<<<<<<< HEAD
-      drawer: const Drawer(),
-=======
-      // Drawer untuk menu Treasury
       drawer: const TreasuryMenu(),
->>>>>>> c44662137a928681b8e4e9d44a844f925b35b28a
       appBar: AppBar(
         backgroundColor: const Color(0xFF4ED471),
         elevation: 0,

@@ -34,11 +34,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // Test accounts to create
   static const _testAccounts = [
-    {'email': 'student@sams.com',    'password': 'sams1234', 'role': 'student',    'name': 'Test Student'},
-    {'email': 'lecturer@sams.com',   'password': 'sams1234', 'role': 'lecturer',   'name': 'Test Lecturer'},
-    {'email': 'adab@sams.com',       'password': 'sams1234', 'role': 'adab',       'name': 'Pusat Adab Staff'},
-    {'email': 'registrar@sams.com',  'password': 'sams1234', 'role': 'registrar',  'name': 'Faculty Registrar'},
-    {'email': 'treasury@sams.com',   'password': 'sams1234', 'role': 'treasury',   'name': 'Treasury Staff'},
+    {'email': 'student@sams.com',    'password': 'sams1234', 'role': 'student',    'name': 'Test Student',       'student_id': 'CB23028', 'lecturer_id': ''},
+    {'email': 'lecturer@sams.com',   'password': 'sams1234', 'role': 'lecturer',   'name': 'Test Lecturer',      'student_id': '',        'lecturer_id': '1002'},
+    {'email': 'adab@sams.com',       'password': 'sams1234', 'role': 'adab',       'name': 'Pusat Adab Staff',   'student_id': '',        'lecturer_id': ''},
+    {'email': 'registrar@sams.com',  'password': 'sams1234', 'role': 'registrar',  'name': 'Faculty Registrar',  'student_id': '',        'lecturer_id': ''},
+    {'email': 'treasury@sams.com',   'password': 'sams1234', 'role': 'treasury',   'name': 'Treasury Staff',     'student_id': '',        'lecturer_id': ''},
   ];
 
   Future<void> _setupTestAccounts() async {
@@ -49,16 +49,20 @@ class _LoginScreenState extends State<LoginScreen> {
     for (final acc in _testAccounts) {
       try {
         // Register in Firebase Auth
-        final user = await _authService.register(acc['email']!, acc['password']!);
+        final user = await _authService.register(acc['email']!, acc['password']!, acc['role']!);
         if (user != null) {
-          // Create Firestore user document with role
+          // Create Firestore user document with role + linked IDs
           await FirebaseFirestore.instance
               .collection('users')
               .doc(user.uid)
               .set({
-            'email': acc['email'],
-            'name': acc['name'],
-            'role': acc['role'],
+            'email':       acc['email'],
+            'name':        acc['name'],
+            'role':        acc['role'],
+            if ((acc['student_id'] ?? '').isNotEmpty)
+              'student_id': acc['student_id'],
+            if ((acc['lecturer_id'] ?? '').isNotEmpty)
+              'lecturer_id': int.tryParse(acc['lecturer_id']!) ?? acc['lecturer_id'],
           });
           created++;
         } else {

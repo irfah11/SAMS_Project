@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../Controller/Manage Attendance/AttendanceController.dart';
 import 'AttendanceCheckIn.dart';
 
-class StudentListClassScreen extends StatelessWidget {
+class StudentListClassScreen extends StatefulWidget {
   final String? subjectId;
   final String? coqId;
   final String subjectName;
-  // Option B: matric student_id (e.g. "CB23028") passed from Co-QSubject
   final String? studentId;
 
   const StudentListClassScreen({
@@ -16,6 +16,41 @@ class StudentListClassScreen extends StatelessWidget {
     required this.subjectName,
     this.studentId,
   });
+
+  @override
+  State<StudentListClassScreen> createState() => _StudentListClassScreenState();
+}
+
+class _StudentListClassScreenState extends State<StudentListClassScreen> {
+  // sessionId → personal status: "Pending" | "Attend" | "Absent" | "Late"
+  Map<String, String> _personalStatus = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPersonalStatus();
+  }
+
+  Future<void> _loadPersonalStatus() async {
+    if (widget.studentId == null) return;
+    final snap = await FirebaseFirestore.instance
+        .collection('AttendanceRecord')
+        .where('Student_id', isEqualTo: widget.studentId)
+        .get();
+
+    final map = <String, String>{};
+    for (final doc in snap.docs) {
+      final d = doc.data();
+      final sessionId = d['session_id'] as String? ?? '';
+      var status = d['status'] as String? ?? 'Absent';
+      if (status == 'Present') status = 'Attend';
+      if (sessionId.isNotEmpty) map[sessionId] = status;
+    }
+    if (mounted) setState(() => _personalStatus = map);
+  }
+
+  String _getPersonalStatus(String sessionId) =>
+      _personalStatus[sessionId] ?? 'Pending';
 
   String _fmtTs(Timestamp? ts) {
     if (ts == null) return '-';
@@ -28,15 +63,10 @@ class StudentListClassScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Query query = FirebaseFirestore.instance
-        .collection('AttendanceSession')
-        .orderBy('start_time', descending: false);
-
-    if (subjectId != null) {
-      query = query.where('subject_id', isEqualTo: subjectId);
-    } else if (coqId != null) {
-      query = query.where('coq_id', isEqualTo: coqId);
-    }
+    final stream = AttendanceController.studentSessionsStream(
+      subjectId: widget.subjectId,
+      coqId: widget.coqId,
+    );
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -68,7 +98,7 @@ class StudentListClassScreen extends StatelessWidget {
                       const Text('Manage Attendance',
                           style: TextStyle(
                               fontSize: 18, fontWeight: FontWeight.w500)),
-                      Text(subjectName,
+                      Text(widget.subjectName,
                           style: const TextStyle(
                               fontSize: 14, color: Colors.black54)),
                     ]),
@@ -76,7 +106,7 @@ class StudentListClassScreen extends StatelessWidget {
             ]),
             const SizedBox(height: 20),
             StreamBuilder<QuerySnapshot>(
-              stream: query.snapshots(),
+              stream: stream,
               builder: (context, snap) {
                 if (snap.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -90,9 +120,8 @@ class StudentListClassScreen extends StatelessWidget {
                       color: Colors.grey.shade400, width: 0.5),
                   columnWidths: const {
                     0: FlexColumnWidth(2.5),
-                    1: FlexColumnWidth(2.5),
-                    2: FlexColumnWidth(3),
-                    3: FlexColumnWidth(2),
+                    1: FlexColumnWidth(3),
+                    2: FlexColumnWidth(2),
                   },
                   children: [
                     _buildHeader(),
@@ -116,7 +145,6 @@ class StudentListClassScreen extends StatelessWidget {
       children: [
         _HCell('Time & Date'),
         _HCell('Description'),
-        _HCell('Location'),
         _HCell('Status'),
       ],
     );
@@ -124,71 +152,71 @@ class StudentListClassScreen extends StatelessWidget {
 
   TableRow _buildRow(
       BuildContext context, String docId, Map<String, dynamic> data) {
-    final status  = data['session_status'] as String? ?? 'Pending';
+    final sessionStatus = data['session_status'] as String? ?? 'Pending';
     final startTs = data['start_time'] as Timestamp?;
     final endTs   = data['end_time'] as Timestamp?;
     final desc    = data['session_description'] as String? ?? '-';
+    final personal = _getPersonalStatus(docId);
 
-    String location = 'UMPSA Campus';
-    final geo = data['session_location'];
-    if (geo is GeoPoint) {
-      location = '${geo.latitude.toStringAsFixed(4)},\n'
-          '${geo.longitude.toStringAsFixed(4)}';
-    }
+    // Only allow tap-to-check-in if session is Active and student hasn't checked in yet
+    final canCheckIn = sessionStatus == 'Active' && personal == 'Pending';
 
     final timeStr = startTs != null && endTs != null
         ? '${_fmtTs(startTs)} -\n${_fmtTs(endTs)}'
         : _fmtTs(startTs);
 
-    final canCheckIn = status == 'Active' || status == 'Pending';
-
     void goCheckIn() {
-      if (canCheckIn) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => AttendanceCheckInScreen(
-              sessionId:   docId,
-              sessionData: data,
-              subjectName: subjectName,
-              studentId:   studentId, // pass matric number down
-            ),
+      if (!canCheckIn) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => AttendanceCheckInScreen(
+            sessionId:   docId,
+            sessionData: data,
+            subjectName: widget.subjectName,
+            studentId:   widget.studentId,
           ),
-        );
-      }
+        ),
+      ).then((_) => _loadPersonalStatus());
     }
 
     return TableRow(children: [
       _DCell(timeStr, tapEnabled: canCheckIn, onTap: goCheckIn),
       _DCell(desc,    tapEnabled: canCheckIn, onTap: goCheckIn),
-      _DCell(location),
       TableCell(
         verticalAlignment: TableCellVerticalAlignment.middle,
         child: Padding(
           padding: const EdgeInsets.all(6),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-            decoration: BoxDecoration(
-              color: _statusColor(status),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(status,
+          child: GestureDetector(
+            onTap: canCheckIn ? goCheckIn : null,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              decoration: BoxDecoration(
+                color: _personalStatusColor(personal),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                personal,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
-                    color: Colors.white)),
+                    color: Colors.white),
+              ),
+            ),
           ),
         ),
       ),
     ]);
   }
 
-  Color _statusColor(String s) {
+  Color _personalStatusColor(String s) {
     switch (s) {
-      case 'Active': return Colors.green.shade600;
-      case 'Passed': return Colors.grey.shade600;
-      default:       return Colors.orange.shade600;
+      case 'Attend': return Colors.green.shade600;
+      case 'Late':   return Colors.orange.shade600;
+      case 'Absent': return Colors.red.shade600;
+      default:       return Colors.grey.shade500; // Pending
     }
   }
 

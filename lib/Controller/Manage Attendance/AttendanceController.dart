@@ -43,9 +43,11 @@ class AttendanceController {
   // ================================================================
 
   /// Load the subjects and CoQ modules assigned to this lecturer.
+  /// [lecturerId] is the numeric ID for course_subjects.
+  /// [lecturerName] is the display name for module_coq (no Lecturer_id field there).
   /// Returns a list of maps with keys: id, name, isCoQ.
   static Future<List<Map<String, dynamic>>> fetchLecturerClasses(
-      dynamic lecturerId) async {
+      dynamic lecturerId, {String lecturerName = ''}) async {
     final list = <Map<String, dynamic>>[];
 
     final subSnap = await _db
@@ -61,17 +63,19 @@ class AttendanceController {
       });
     }
 
-    final coqSnap = await _db
-        .collection('module_coq')
-        .where('Lecturer_id', isEqualTo: lecturerId)
-        .get();
-    for (final doc in coqSnap.docs) {
-      final d = doc.data();
-      list.add({
-        'id':    d['coq_id'] ?? doc.id,
-        'name':  d['activity_name'] ?? 'Unknown Activity',
-        'isCoQ': true,
-      });
+    if (lecturerName.isNotEmpty) {
+      final coqSnap = await _db
+          .collection('module_coq')
+          .where('lecturer_name', isEqualTo: lecturerName)
+          .get();
+      for (final doc in coqSnap.docs) {
+        final d = doc.data();
+        list.add({
+          'id':    d['coq_id'] ?? doc.id,
+          'name':  d['activity_name'] ?? 'Unknown Activity',
+          'isCoQ': true,
+        });
+      }
     }
 
     return list;
@@ -240,10 +244,11 @@ class AttendanceController {
       String studentId) async {
     final list = <Map<String, dynamic>>[];
 
+    // course_registrations stores student_id as String (e.g. "CB23038")
+    // No status filter — approval screen not yet wired to Firestore
     final regSnap = await _db
-        .collection('course_registration')
+        .collection('course_registrations')
         .where('student_id', isEqualTo: studentId)
-        .where('status', isEqualTo: 'Approved')
         .get();
     for (final doc in regSnap.docs) {
       final d = doc.data();
@@ -255,7 +260,7 @@ class AttendanceController {
     }
 
     final coqSnap = await _db
-        .collection('coq_registration')
+        .collection('module_coq_registrations')
         .where('student_id', isEqualTo: studentId)
         .where('status', isEqualTo: 'Active')
         .get();
@@ -321,7 +326,7 @@ class AttendanceController {
       return const CheckInResult(
           success: false,
           message:
-              'Attendance Check-In Failed.\nYou had enter the wrong code.');
+              'Attendance Check-In Failed.\nYou had enter the wrong code for Check-In your attendance.');
     }
 
     const GeoPoint studentLoc = GeoPoint(3.5568, 103.4268);
@@ -362,8 +367,8 @@ class AttendanceController {
   /// Live stream of all Co-Q modules, ordered by activityName.
   static Stream<QuerySnapshot> coqModulesStream() {
     return _db
-        .collection('moduleCoQ')
-        .orderBy('activityName')
+        .collection('module_coq')
+        .orderBy('activity_name')
         .snapshots();
   }
 

@@ -142,7 +142,7 @@ class _AddAttendanceScreenState extends State<AddAttendanceScreen> {
 
         // Navigate to GenerateAttendance as per SDD algorithm
         final sessionData = {
-          'Lecturer_id':         uid,
+          'Lecturer_id':         widget.lecturerId,
           'subject_name':        widget.subjectName,
           'session_description': _descController.text.trim(),
           'start_time':          _toTimestamp(_startTime!),

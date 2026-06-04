@@ -46,12 +46,7 @@ class PusatAdabDashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-<<<<<<< HEAD
       drawer: _buildDrawer(context),
-=======
-      // Placeholder for the Pusat Adab specific menu
-      drawer: const PusatAdabMenu(),
->>>>>>> c44662137a928681b8e4e9d44a844f925b35b28a
       appBar: AppBar(
         backgroundColor: const Color(0xFF965E5E),
         elevation: 0,

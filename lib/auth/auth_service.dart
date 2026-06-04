@@ -68,8 +68,17 @@ class AuthService {
       if (user != null) {
         final data = <String, dynamic>{'email': email, 'role': role};
         if (linkedId.isNotEmpty) {
-          // Students link to a student record; everyone else is staff.
-          data[role == 'student' ? 'student_id' : 'staff_id'] = linkedId;
+          // Route the linked ID to the field the attendance module reads:
+          //   students  → student_id  (String, e.g. "CB23028")
+          //   lecturers → lecturer_id (numeric, e.g. 1002)
+          //   others    → staff_id
+          if (role == 'student') {
+            data['student_id'] = linkedId;
+          } else if (role == 'lecturer') {
+            data['lecturer_id'] = int.tryParse(linkedId) ?? linkedId;
+          } else {
+            data['staff_id'] = linkedId;
+          }
         }
         await _firestore.collection('users').doc(user.uid).set(data);
       }

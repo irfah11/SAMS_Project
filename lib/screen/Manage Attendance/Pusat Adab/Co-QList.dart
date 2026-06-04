@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../Controller/Manage Attendance/AttendanceController.dart';
 import 'ClassCo-Q.dart';
 
 class PusatAdabCoQListScreen extends StatelessWidget {
@@ -54,10 +55,7 @@ class PusatAdabCoQListScreen extends StatelessWidget {
             const SizedBox(height: 24),
 
             StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('moduleCoQ')
-                  .orderBy('activityName')
-                  .snapshots(),
+              stream: AttendanceController.coqModulesStream(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -72,9 +70,9 @@ class PusatAdabCoQListScreen extends StatelessWidget {
                       context,
                       coqId: doc.id,
                       activityName:
-                          data['activityName'] as String? ?? 'Unknown Activity',
+                          data['activity_name'] as String? ?? 'Unknown Activity',
                       location: data['location'] as String? ?? '-',
-                      quota: data['bookingQuota'] as int? ?? 0,
+                      quota: data['booking_quota'] as int? ?? 0,
                     );
                   }).toList(),
                 );

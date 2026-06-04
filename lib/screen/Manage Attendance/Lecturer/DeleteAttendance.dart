@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../Controller/Manage Attendance/AttendanceController.dart';
 
 class DeleteAttendanceScreen extends StatefulWidget {
   final String sessionId;
@@ -20,66 +21,37 @@ class _DeleteAttendanceScreenState extends State<DeleteAttendanceScreen> {
   static const _blue = Color(0xFF4C66EE);
   bool _isDeleting = false;
 
-  // verifySessionStatus — deny deletion if session is already 'Passed'
-  Future<bool> _verifySessionStatus() async {
-    final doc = await FirebaseFirestore.instance
-        .collection('AttendanceSession')
-        .doc(widget.sessionId)
-        .get();
-    if (!doc.exists) return true;
-    final status = doc.data()?['session_status'] as String? ?? '';
-    return status != 'Passed';
-  }
-
   Future<void> _confirmDelete() async {
     setState(() => _isDeleting = true);
     try {
-      final canDelete = await _verifySessionStatus();
-      if (!canDelete) {
-        if (mounted) {
-          setState(() => _isDeleting = false);
-          showDialog(
-            context: context,
-            builder: (_) => AlertDialog(
-              title: const Text('Cannot Delete'),
-              content: const Text(
-                  'This session has been completed (Passed). '
-                  'Completed sessions cannot be deleted to preserve records.'),
-              actions: [
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: _blue, foregroundColor: Colors.white),
-                  child: const Text('OK'),
-                ),
-              ],
-            ),
-          );
-        }
-        return;
-      }
-
-      // Batch delete: AttendanceRecord docs + the AttendanceSession doc
-      final records = await FirebaseFirestore.instance
-          .collection('AttendanceRecord')
-          .where('session_id', isEqualTo: widget.sessionId)
-          .get();
-
-      final batch = FirebaseFirestore.instance.batch();
-      for (final doc in records.docs) {
-        batch.delete(doc.reference);
-      }
-      batch.delete(FirebaseFirestore.instance
-          .collection('AttendanceSession')
-          .doc(widget.sessionId));
-      await batch.commit();
-
+      await AttendanceController.deleteSession(widget.sessionId);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text('Class has been deleted successfully.'),
             backgroundColor: Colors.green));
         Navigator.pop(context);
         Navigator.pop(context);
+      }
+    } on SessionPassedException {
+      if (mounted) {
+        setState(() => _isDeleting = false);
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Cannot Delete'),
+            content: const Text(
+                'This session has been completed (Passed). '
+                'Completed sessions cannot be deleted to preserve records.'),
+            actions: [
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: _blue, foregroundColor: Colors.white),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {

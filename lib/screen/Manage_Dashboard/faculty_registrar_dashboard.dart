@@ -45,12 +45,7 @@ class FacultyRegistrarDashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-<<<<<<< HEAD
-      drawer: const Drawer(),
-=======
-      // You can create a specific FacultyRegistrarDrawer later
       drawer: const FacultyRegistrarMenu(),
->>>>>>> c44662137a928681b8e4e9d44a844f925b35b28a
       appBar: AppBar(
         backgroundColor: const Color(0xFFE67E33),
         elevation: 0,
