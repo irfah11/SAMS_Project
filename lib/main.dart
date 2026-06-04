@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-// Import fail login awak
+import 'package:flutter_stripe/flutter_stripe.dart';
+// Import fail login
+
 import 'package:sams/auth/login_screen.dart';
+import 'package:sams/config/stripe_config.dart';
 // Import firebase_options yang kita dah jana tadi
 
 // FIX: Buang 'dynamic DefaultFirebaseOptions' dari dalam kurungan main()
@@ -22,6 +25,10 @@ void main() async {
           'sams-7a359.firebasestorage.app', // Ini ID projek awak berdasarkan gambar tadi
     ),
   );
+
+  // 3. Initialise Stripe with the publishable key.
+  Stripe.publishableKey = StripeConfig.publishableKey;
+  await Stripe.instance.applySettings();
 
   runApp(const MyApp());
 }

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../auth/auth_service.dart';
 import '../../auth/login_screen.dart';
 
+import '../Manage_Menu/treasury_menu.dart';
+
 class TreasuryDashboard extends StatelessWidget {
   const TreasuryDashboard({super.key});
 
@@ -43,7 +45,12 @@ class TreasuryDashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+<<<<<<< HEAD
       drawer: const Drawer(),
+=======
+      // Drawer untuk menu Treasury
+      drawer: const TreasuryMenu(),
+>>>>>>> c44662137a928681b8e4e9d44a844f925b35b28a
       appBar: AppBar(
         backgroundColor: const Color(0xFF4ED471),
         elevation: 0,
@@ -97,6 +104,16 @@ class TreasuryDashboard extends StatelessWidget {
                       width: 65,
                       height: 65,
                       fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        width: 65,
+                        height: 65,
+                        color: const Color(0xFFE0E0E0),
+                        child: const Icon(
+                          Icons.person,
+                          size: 40,
+                          color: Colors.black54,
+                        ),
+                      ),
                     ),
                   ),
                 ],

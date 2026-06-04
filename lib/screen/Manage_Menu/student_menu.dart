@@ -2,12 +2,19 @@ import 'package:flutter/material.dart';
 import '../Manage_subject_and_Coq_registration/student/coq_list.dart';
 import '../Manage_subject_and_Coq_registration/student/reg_dashboard.dart';
 import '../Manage_subject_and_Coq_registration/student/booked_coq.dart';
+<<<<<<< HEAD
 import '../Manage Attendance/student/Co-QSubject.dart';
 import '../../auth/auth_service.dart';
 import '../../auth/login_screen.dart';
+=======
+import '../Fee/Student/FeePage.dart';
+import 'package:sams/auth/auth_service.dart';
+import 'package:sams/auth/login_screen.dart';
+>>>>>>> c44662137a928681b8e4e9d44a844f925b35b28a
 
 class StudentDrawer extends StatelessWidget {
-  const StudentDrawer({super.key});
+  final String studentId;
+  const StudentDrawer({super.key, this.studentId = ''});
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +52,14 @@ class StudentDrawer extends StatelessWidget {
                     context,
                     Icons.home_outlined,
                     'Home',
-                    onTap: () => Navigator.pop(context),
+                    onTap: () {
+                      Navigator.pop(context); // close the drawer
+                      // Return to the dashboard (the first route after login),
+                      // popping any pages opened on top of it. If already on
+                      // the dashboard this is a no-op.
+                      Navigator.of(context)
+                          .popUntil((route) => route.isFirst);
+                    },
                   ),
                   const Divider(
                     height: 1,
@@ -64,7 +78,7 @@ class StudentDrawer extends StatelessWidget {
                         context,
                         MaterialPageRoute(
                           builder: (context) =>
-                              const CourseRegDashboardScreen(),
+                              CourseRegDashboardScreen(studentId: studentId),
                         ),
                       );
                     },
@@ -163,7 +177,22 @@ class StudentDrawer extends StatelessWidget {
                   _buildDropdownMenu(
                     icon: Icons.attach_money,
                     title: 'Financial Details',
-                    children: [_buildSubMenuItem(context, 'Fee Statement')],
+                    children: [
+                      _buildSubMenuItem(
+                        context,
+                        'Fee Statement',
+                        onTap: () {
+                          Navigator.pop(context); // Close Drawer
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  FeePage(studentId: studentId),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
                   ),
                   const Divider(
                     height: 1,
@@ -174,6 +203,7 @@ class StudentDrawer extends StatelessWidget {
                 ],
               ),
             ),
+<<<<<<< HEAD
             // Logout at bottom of drawer
             const Divider(height: 1, color: Color(0xFFCCCCCC)),
             ListTile(
@@ -219,6 +249,29 @@ class StudentDrawer extends StatelessWidget {
               },
             ),
             const SizedBox(height: 8),
+=======
+            const Divider(height: 1, color: Color(0xFFCCCCCC)),
+            ListTile(
+              leading: const Icon(Icons.logout, color: Colors.red),
+              title: const Text(
+                'Logout',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              onTap: () async {
+                final navigator = Navigator.of(context);
+                await AuthService().logout();
+                navigator.pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  (route) => false,
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+>>>>>>> c44662137a928681b8e4e9d44a844f925b35b28a
           ],
         ),
       ),

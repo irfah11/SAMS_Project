@@ -1,7 +1,8 @@
 // ignore: file_names
 import 'package:flutter/material.dart';
-// IMPORTANT: Make sure this matches your actual filename for the second screen
-import 'course_reg.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:sams/Controller/Manage_Coq_and_Subject_Registration/RegistrationController.dart';
+import 'package:sams/Domain/registration_subject.dart';
 
 class CourseRegApprovalScreen extends StatefulWidget {
   final String semester;
@@ -14,13 +15,122 @@ class CourseRegApprovalScreen extends StatefulWidget {
 }
 
 class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
-  // Logic to track registered subjects
-  List<Map<String, String>> registeredSubjects = [];
+  // 1. ID Pelajar aktif berdasarkan String unik pangkalan data Firebase
+  final String currentStudentId = "CB23041";
 
-  // Dropdown variables
-  String? selectedCourse;
-  String? selectedSection;
-  String? selectedLab;
+  // Pembolehubah untuk menyimpan maklumat profil pelajar dari database secara dinamik
+  String studentName = "Loading...";
+  String studentProgramme = "Loading...";
+  String studentAdvisor = "Loading...";
+
+  // Pembolehubah untuk menjejak pilihan dropdown subjek
+  List<QueryDocumentSnapshot> _allFacultyCourses = [];
+  String? _selectedSubjectId;
+  String? _selectedSection;
+  String? _selectedLab;
+  Map<String, dynamic>? _currentSelectedCourseData;
+
+  final RegistrationController _controller = RegistrationController();
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchStudentProfile();
+  }
+
+  // 2. Fungsi membaca dokumen profil dari koleksi 'student'
+  void _fetchStudentProfile() async {
+    try {
+      var studentQuery = await FirebaseFirestore.instance
+          .collection('student')
+          .where('student_id', isEqualTo: currentStudentId)
+          .get();
+
+      if (studentQuery.docs.isNotEmpty && mounted) {
+        var data = studentQuery.docs.first.data();
+        setState(() {
+          studentName = data['full_name'] ?? 'No Name';
+          studentProgramme = data['programme'] ?? 'No Programme';
+          studentAdvisor = data['advisor_name'] ?? 'No Advisor';
+        });
+      } else {
+        setState(() {
+          studentName = "Pelajar Tidak Dijumpai";
+          studentProgramme = "Sila semak ID";
+          studentAdvisor = "CB23041";
+        });
+      }
+    } catch (e) {
+      setState(() {
+        studentName = "Ralat: $e";
+      });
+    }
+  }
+
+  // Fungsi menyimpan pendaftaran subjek dan terus dipaparkan pada jadual secara real-time
+  void _addCourseToApproval() async {
+    if (_selectedSubjectId == null ||
+        _selectedSection == null ||
+        _selectedLab == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sila pilih Course, Section dan Tutorial/Lab!'),
+        ),
+      );
+      return;
+    }
+
+    String uniqueRegId = 'REG_${DateTime.now().millisecondsSinceEpoch}';
+
+    // Menukar String ID "CB23041" kepada Integer untuk memenuhi keperluan jenis data domain model
+    int parsedStudentId =
+        int.tryParse(currentStudentId.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+
+    RegistrationSubject newReg = RegistrationSubject(
+      regId: uniqueRegId,
+      studentId: parsedStudentId, // Nilai integer untuk entiti model domain
+      fullName: studentName,
+      programme: studentProgramme,
+      advisorName: studentAdvisor,
+      semester: int.tryParse(widget.semester) ?? 1,
+      subjectId: _currentSelectedCourseData!['subject_id'] ?? '',
+      subjectName: _currentSelectedCourseData!['subject_name'] ?? '',
+      section: _selectedSection!,
+      tutorialLab: _selectedLab!,
+      creditHour: 3,
+      status: 'Pending',
+    );
+
+    try {
+      // PERUBAHAN UTAMA: Menyimpan transaksi pendaftaran baharu ke Firebase
+      await _controller.submitCourseRegistration(newReg);
+
+      // Mengemaskini field 'student_id' secara nyata dalam dokumen transaksi kepada String "CB23041"
+      // supaya sepadan dengan struktur kueri carian getPendingRegistrations()
+      await FirebaseFirestore.instance
+          .collection('course_registrations')
+          .doc(uniqueRegId)
+          .update({'student_id': currentStudentId});
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Subjek berjaya dihantar untuk kelulusan!'),
+        ),
+      );
+
+      // Mengosongkan semula pilihan input dropdown selepas berjaya ditambah
+      setState(() {
+        _selectedSubjectId = null;
+        _selectedSection = null;
+        _selectedLab = null;
+        _currentSelectedCourseData = null;
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Ralat semasa mendaftar: $e')));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -52,7 +162,7 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
         padding: const EdgeInsets.all(20.0),
         child: Column(
           children: [
-            // 1. Student Profile Section
+            // 1. Dynamic Student Profile Section
             Container(
               padding: const EdgeInsets.all(15),
               decoration: BoxDecoration(
@@ -61,47 +171,161 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
               ),
               child: Column(
                 children: [
-                  _buildDisabledField("Name", "Value"),
-                  _buildDisabledField("Programme", "Value"),
-                  _buildDisabledField("Advisor", "Value"),
+                  _buildDisabledField("Name", studentName),
+                  _buildDisabledField("Programme", studentProgramme),
+                  _buildDisabledField("Advisor", studentAdvisor),
                   _buildDisabledField("Semester", widget.semester),
                 ],
               ),
             ),
             const SizedBox(height: 25),
 
-            // 2. Selection UI
-            _buildDropdown(
-              "Course",
-              selectedCourse,
-              (val) => setState(() => selectedCourse = val),
-            ),
-            _buildDropdown(
-              "Section",
-              selectedSection,
-              (val) => setState(() => selectedSection = val),
-            ),
-            _buildDropdown(
-              "Tutorial/Lab",
-              selectedLab,
-              (val) => setState(() => selectedLab = val),
+            // 2. Selection UI (Menarik data dari Faculty Registrar)
+            StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('course_subjects')
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) return const LinearProgressIndicator();
+
+                _allFacultyCourses = snapshot.data!.docs;
+
+                // Tapis kod subjek unik untuk dimasukkan ke Dropdown Course
+                Set<String> uniqueSubjectIds = {};
+                List<Map<String, dynamic>> uniqueCoursesList = [];
+
+                for (var doc in _allFacultyCourses) {
+                  var data = doc.data() as Map<String, dynamic>;
+                  String sId = data['subject_id'] ?? data['subjectId'] ?? '';
+                  if (sId.isNotEmpty && !uniqueSubjectIds.contains(sId)) {
+                    uniqueSubjectIds.add(sId);
+                    uniqueCoursesList.add(data);
+                  }
+                }
+
+                // Tapis Section & Lab secara dinamik mengikut subjek yang dipilih
+                List<String> availableSections = [];
+                List<String> availableLabs = [];
+
+                if (_selectedSubjectId != null) {
+                  for (var doc in _allFacultyCourses) {
+                    var data = doc.data() as Map<String, dynamic>;
+                    if ((data['subject_id'] ?? data['subjectId']) ==
+                        _selectedSubjectId) {
+                      if (data['section'] != null &&
+                          !availableSections.contains(data['section'])) {
+                        availableSections.add(data['section']);
+                      }
+                      String labKey =
+                          data['tutorial_lab'] ?? data['TutorialLab'] ?? '';
+                      if (labKey.isNotEmpty &&
+                          !availableLabs.contains(labKey)) {
+                        availableLabs.add(labKey);
+                      }
+                    }
+                  }
+                }
+
+                return Column(
+                  children: [
+                    // DROPDOWN: Course
+                    _buildDropdownRow(
+                      "Course",
+                      DropdownButton<String>(
+                        isExpanded: true,
+                        hint: const Text(
+                          "Value",
+                          style: TextStyle(fontSize: 13, color: Colors.grey),
+                        ),
+                        value: _selectedSubjectId,
+                        items: uniqueCoursesList.map((course) {
+                          String sId =
+                              course['subject_id'] ?? course['subjectId'] ?? '';
+                          String sName =
+                              course['subject_name'] ??
+                              course['subjectName'] ??
+                              'No Name';
+                          return DropdownMenuItem<String>(
+                            value: sId,
+                            child: Text(
+                              '$sId $sName',
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          setState(() {
+                            _selectedSubjectId = val;
+                            _selectedSection = null;
+                            _selectedLab = null;
+                            _currentSelectedCourseData = uniqueCoursesList
+                                .firstWhere(
+                                  (c) =>
+                                      (c['subject_id'] ?? c['subjectId']) ==
+                                      val,
+                                );
+                          });
+                        },
+                      ),
+                    ),
+
+                    // DROPDOWN: Section
+                    _buildDropdownRow(
+                      "Section",
+                      DropdownButton<String>(
+                        isExpanded: true,
+                        hint: const Text(
+                          "Value",
+                          style: TextStyle(fontSize: 13, color: Colors.grey),
+                        ),
+                        value: _selectedSection,
+                        items: availableSections.map((sec) {
+                          return DropdownMenuItem<String>(
+                            value: sec,
+                            child: Text(
+                              sec,
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (val) =>
+                            setState(() => _selectedSection = val),
+                      ),
+                    ),
+
+                    // DROPDOWN: Tutorial/Lab
+                    _buildDropdownRow(
+                      "Tutorial/Lab",
+                      DropdownButton<String>(
+                        isExpanded: true,
+                        hint: const Text(
+                          "Value",
+                          style: TextStyle(fontSize: 13, color: Colors.grey),
+                        ),
+                        value: _selectedLab,
+                        items: availableLabs.map((lab) {
+                          return DropdownMenuItem<String>(
+                            value: lab,
+                            child: Text(
+                              lab,
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (val) => setState(() => _selectedLab = val),
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 15),
 
-            // 3. THE ADD BUTTON (Navigation logic added here)
+            // 3. THE ADD BUTTON
             ElevatedButton(
-              onPressed: () {
-                // This is the "Magic Link" that sends the user to the second page
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                        CourseRegScreen(semester: widget.semester),
-                  ),
-                );
-              },
+              onPressed: _addCourseToApproval,
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF64D2EC), // Blue color
+                backgroundColor: const Color(0xFF64D2EC),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -109,10 +333,9 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
               ),
               child: const Text("Add", style: TextStyle(color: Colors.black)),
             ),
-
             const SizedBox(height: 30),
 
-            // 4. Labels above Table
+            // 4. Table Headers Label
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
@@ -121,6 +344,7 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
               ],
             ),
 
+<<<<<<< HEAD
             // 5. Registration Table with Empty State Logic
             Table(
               border: TableBorder.all(color: Colors.grey.shade400),
@@ -168,9 +392,77 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
                       ,
               ],
             ),
+=======
+            // 5. Real-Time Registration Table (StreamBuilder)
+            StreamBuilder<List<RegistrationSubject>>(
+              stream: _controller.getPendingRegistrations(currentStudentId),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Padding(
+                    padding: EdgeInsets.all(20.0),
+                    child: CircularProgressIndicator(),
+                  );
+                }
+>>>>>>> c44662137a928681b8e4e9d44a844f925b35b28a
 
-            // Only show bottom total/notify if there are subjects
-            if (registeredSubjects.isNotEmpty) _buildBottomControls(),
+                var registeredList = snapshot.data ?? [];
+
+                return Column(
+                  children: [
+                    Table(
+                      border: TableBorder.all(color: Colors.grey.shade400),
+                      columnWidths: const {
+                        0: IntrinsicColumnWidth(),
+                        1: FlexColumnWidth(4),
+                        2: FlexColumnWidth(1.5),
+                        3: FlexColumnWidth(1),
+                        4: FlexColumnWidth(2),
+                      },
+                      children: [
+                        _buildTableHeader(),
+                        if (registeredList.isEmpty)
+                          TableRow(
+                            children: [
+                              const SizedBox(),
+                              TableCell(
+                                child: Container(
+                                  padding: const EdgeInsets.all(20),
+                                  alignment: Alignment.center,
+                                  child: const Text(
+                                    "You haven't registered any subjects yet.",
+                                    style: TextStyle(
+                                      color: Colors.grey,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(),
+                              const SizedBox(),
+                              const SizedBox(),
+                            ],
+                          )
+                        else
+                          ...List.generate(registeredList.length, (index) {
+                            var sub = registeredList[index];
+                            return _buildTableRow(
+                              (index + 1).toString(),
+                              '${sub.subjectId}\n${sub.subjectName}',
+                              '${sub.section}\n${sub.tutorialLab}',
+                              sub.creditHour.toString(),
+                              sub.regId,
+                            );
+                          }),
+                      ],
+                    ),
+
+                    // 6. Tampilkan kawalan bawah (Total & Notify) sekiranya jadual tidak kosong
+                    if (registeredList.isNotEmpty)
+                      _buildBottomControls(registeredList),
+                  ],
+                );
+              },
+            ),
           ],
         ),
       ),
@@ -200,7 +492,11 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
                 alignment: Alignment.centerLeft,
                 child: Text(
                   value,
-                  style: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+                  style: const TextStyle(
+                    color: Colors.black87,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w400,
+                  ),
                 ),
               ),
             ),
@@ -210,11 +506,7 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
     );
   }
 
-  Widget _buildDropdown(
-    String label,
-    String? value,
-    ValueChanged<String?> onChanged,
-  ) {
+  Widget _buildDropdownRow(String label, Widget dropdownWidget) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5.0),
       child: Row(
@@ -231,20 +523,7 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
                 border: Border.all(color: Colors.grey.shade300),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: value,
-                  isExpanded: true,
-                  hint: const Text(
-                    "Value",
-                    style: TextStyle(fontSize: 13, color: Colors.grey),
-                  ),
-                  items: ["Subject A", "Subject B"]
-                      .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                      .toList(),
-                  onChanged: onChanged,
-                ),
-              ),
+              child: DropdownButtonHideUnderline(child: dropdownWidget),
             ),
           ),
         ],
@@ -324,6 +603,7 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
     String subject,
     String section,
     String credit,
+    String regId,
   ) {
     return TableRow(
       children: [
@@ -357,11 +637,7 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
             child: SizedBox(
               height: 30,
               child: ElevatedButton(
-                onPressed: () {
-                  setState(() {
-                    registeredSubjects.removeWhere((item) => item['no'] == no);
-                  });
-                },
+                onPressed: () => _controller.dropRegisteredCourse(regId),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.grey[200],
                   foregroundColor: Colors.black,
@@ -380,11 +656,9 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
     );
   }
 
-  Widget _buildBottomControls() {
-    int totalCredits = registeredSubjects.fold(
-      0,
-      (sum, item) => sum + int.parse(item['credit']!),
-    );
+  Widget _buildBottomControls(List<RegistrationSubject> list) {
+    int totalCredits = list.fold(0, (sum, item) => sum + item.creditHour);
+
     return Table(
       border: TableBorder.all(color: Colors.grey.shade400),
       columnWidths: const {
@@ -415,7 +689,15 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
               child: SizedBox(
                 height: 38,
                 child: ElevatedButton(
-                  onPressed: () {},
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Academic Advisor has been notified successfully!',
+                        ),
+                      ),
+                    );
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF00D084),
                     elevation: 0,

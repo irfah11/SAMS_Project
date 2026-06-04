@@ -21,7 +21,6 @@ class LecturerListClassScreen extends StatelessWidget {
     required this.subjectName,
     required this.isCoQ,
     required this.lecturerId,
-    required this.coqId,
   });
 
   static const _blue = Color(0xFF4C66EE);

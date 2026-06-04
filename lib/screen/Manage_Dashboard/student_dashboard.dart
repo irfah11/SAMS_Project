@@ -1,10 +1,12 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../Manage_Menu/student_menu.dart';
 import '../../auth/auth_service.dart';
 import '../../auth/login_screen.dart';
 
 class StudentDashboard extends StatelessWidget {
-  const StudentDashboard({super.key});
+  final String studentId;
+  const StudentDashboard({super.key, this.studentId = ''});
 
   void _logout(BuildContext context) {
     showDialog(
@@ -44,7 +46,7 @@ class StudentDashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      drawer: const StudentDrawer(),
+      drawer: StudentDrawer(studentId: studentId),
       appBar: AppBar(
         backgroundColor: const Color(0xFF5CE1E6),
         elevation: 0,
@@ -82,14 +84,33 @@ class StudentDashboard extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Welcome Back,\nNURUL BALQIS',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                      height: 1.2,
-                      fontFamily: 'Serif',
+                  // Load the logged-in student's real name from Firestore.
+                  // The student doc is keyed by studentId (e.g. student/CB23076).
+                  Flexible(
+                    child: FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                      future: studentId.isEmpty
+                          ? null
+                          : FirebaseFirestore.instance
+                              .collection('student')
+                              .doc(studentId)
+                              .get(),
+                      builder: (context, snapshot) {
+                        String name = 'Student';
+                        if (snapshot.hasData && snapshot.data!.exists) {
+                          name = (snapshot.data!.data()?['full_name'] ?? 'Student')
+                              .toString();
+                        }
+                        return Text(
+                          'Welcome Back,\n${name.toUpperCase()}',
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black,
+                            height: 1.2,
+                            fontFamily: 'Serif',
+                          ),
+                        );
+                      },
                     ),
                   ),
                   ClipOval(
@@ -98,6 +119,16 @@ class StudentDashboard extends StatelessWidget {
                       width: 65,
                       height: 65,
                       fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        width: 65,
+                        height: 65,
+                        color: const Color(0xFFE0E0E0),
+                        child: const Icon(
+                          Icons.person,
+                          size: 40,
+                          color: Colors.black54,
+                        ),
+                      ),
                     ),
                   ),
                 ],

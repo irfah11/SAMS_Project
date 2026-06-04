@@ -3,6 +3,8 @@ import '../Manage Attendance/Pusat Adab/Co-QList.dart';
 import '../../auth/auth_service.dart';
 import '../../auth/login_screen.dart';
 
+import '../Manage_Menu/pusat_adab_menu.dart';
+
 class PusatAdabDashboard extends StatelessWidget {
   const PusatAdabDashboard({super.key});
 
@@ -44,7 +46,12 @@ class PusatAdabDashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+<<<<<<< HEAD
       drawer: _buildDrawer(context),
+=======
+      // Placeholder for the Pusat Adab specific menu
+      drawer: const PusatAdabMenu(),
+>>>>>>> c44662137a928681b8e4e9d44a844f925b35b28a
       appBar: AppBar(
         backgroundColor: const Color(0xFF965E5E),
         elevation: 0,
@@ -98,6 +105,16 @@ class PusatAdabDashboard extends StatelessWidget {
                       width: 65,
                       height: 65,
                       fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        width: 65,
+                        height: 65,
+                        color: const Color(0xFFE0E0E0),
+                        child: const Icon(
+                          Icons.person,
+                          size: 40,
+                          color: Colors.black54,
+                        ),
+                      ),
                     ),
                   ),
                 ],

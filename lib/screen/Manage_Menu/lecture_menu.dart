@@ -3,6 +3,10 @@ import '../Manage Attendance/Lecturer/Co-QSubject.dart';
 import '../../auth/auth_service.dart';
 import '../../auth/login_screen.dart';
 
+import 'package:sams/auth/auth_service.dart';
+import 'package:sams/auth/login_screen.dart';
+import '../Manage_subject_and_Coq_registration/Lecturer/approval_reg.dart';
+
 class LecturerDrawer extends StatelessWidget {
   const LecturerDrawer({super.key});
 
@@ -55,11 +59,15 @@ class LecturerDrawer extends StatelessWidget {
                   // Approval Course Registration
                   _buildMenuItem(
                     context,
-                    Icons.book_outlined,
+                    Icons.menu_book_outlined,
                     'Approval Course Registration',
                     onTap: () {
-                      Navigator.pop(context);
-                      // Navigator.push logic for Approval screen goes here
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ApprovalReg(),
+                        ),
+                      );
                     },
                   ),
                   const Divider(
@@ -131,6 +139,7 @@ class LecturerDrawer extends StatelessWidget {
                 ],
               ),
             ),
+<<<<<<< HEAD
             // Logout at bottom of drawer
             const Divider(height: 1, color: Color(0xFFCCCCCC)),
             ListTile(
@@ -176,6 +185,29 @@ class LecturerDrawer extends StatelessWidget {
               },
             ),
             const SizedBox(height: 8),
+=======
+            const Divider(height: 1, color: Color(0xFFCCCCCC)),
+            ListTile(
+              leading: const Icon(Icons.logout, color: Colors.red),
+              title: const Text(
+                'Logout',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              onTap: () async {
+                final navigator = Navigator.of(context);
+                await AuthService().logout();
+                navigator.pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  (route) => false,
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+>>>>>>> c44662137a928681b8e4e9d44a844f925b35b28a
           ],
         ),
       ),
