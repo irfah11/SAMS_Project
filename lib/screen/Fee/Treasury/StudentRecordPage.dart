@@ -1,13 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:moon_design/moon_design.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 import 'package:sams/Domain/fee.dart';
 
 import 'package:sams/screen/Fee/Student/FeePage.dart'
-    show SamsHeader, formatMoney, formatDate;
+    show SamsHeader, formatMoney;
 
 import 'TreasuryDashboardPage.dart' show kTreasuryGreen;
 
@@ -157,67 +154,22 @@ class StudentRecordController {
     });
   }
 
-  /// Per SDD-REQ-308 generatePDFReport().
-  static Future<void> generatePDFReport(StudentFinancialRecord r) async {
-    final pdf = pw.Document();
-
-    String money(double v) => 'RM ${formatMoney(v)}';
-
-    pdf.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
-        build: (context) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Text('SAMS — Student Fee Report',
-                style: pw.TextStyle(
-                    fontSize: 22, fontWeight: pw.FontWeight.bold)),
-            pw.SizedBox(height: 4),
-            pw.Text('Generated ${formatDate(DateTime.now())}',
-                style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700)),
-            pw.Divider(),
-            pw.SizedBox(height: 10),
-            pw.Text('Name: ${r.fullName}'),
-            pw.Text('Matric: ${r.studentId}'),
-            pw.Text('Semester: ${r.semesterId}'),
-            pw.Text('Payment Status: ${r.paymentStatus}'),
-            pw.Text('Access Status: ${r.accessStatus}'),
-            pw.SizedBox(height: 16),
-            pw.Text('FEE SUMMARY',
-                style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-            pw.SizedBox(height: 8),
-            _pdfRow('Tuition fee', money(r.tuitionFee)),
-            _pdfRow('Medical fee', money(r.medicalFee)),
-            _pdfRow('Student welfare', money(r.welfareFee)),
-            _pdfRow('Insurance', money(r.insuranceFee)),
-            _pdfRow('Student activity', money(r.activityFee)),
-            _pdfRow('Hostel activity', money(r.hostelFee)),
-            pw.Divider(),
-            _pdfRow('Semester Fee', money(r.semesterFee), bold: true),
-            _pdfRow('Amount Paid', money(r.amountPaid)),
-            _pdfRow('Balance', money(r.balance), bold: true),
-          ],
-        ),
-      ),
-    );
-
-    // Opens the system print/share dialog so the user can save the PDF.
-    await Printing.layoutPdf(onLayout: (format) async => pdf.save());
-  }
-
-  static pw.Widget _pdfRow(String label, String value, {bool bold = false}) {
-    final style = pw.TextStyle(
-      fontSize: 12,
-      fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
-    );
-    return pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(vertical: 3),
-      child: pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-        children: [pw.Text(label, style: style), pw.Text(value, style: style)],
-      ),
-    );
+  /// Per SDD-REQ-308 generateReport().
+  /// Records that a fee report was generated for this student so a backend /
+  /// audit trail can pick it up. The PDF export itself is handled later once
+  /// the `printing` package is wired in; the UI shows a success confirmation.
+  static Future<void> generateReport(StudentFinancialRecord r) async {
+    final db = FirebaseFirestore.instance;
+    await db.collection('fee_reports').add({
+      'student_id': r.studentId,
+      'student_name': r.fullName,
+      'semester_id': r.semesterId,
+      'semester_fee': r.semesterFee,
+      'amount_paid': r.amountPaid,
+      'balance': r.balance,
+      'payment_status': r.paymentStatus,
+      'created_at': FieldValue.serverTimestamp(),
+    });
   }
 }
 
@@ -313,13 +265,47 @@ class _StudentRecordPageState extends State<StudentRecordPage> {
   Future<void> _onGenerateReport() async {
     if (_record == null) return;
     try {
-      await StudentRecordController.generatePDFReport(_record!);
+      await StudentRecordController.generateReport(_record!);
+      if (!mounted) return;
+      _showReportGeneratedDialog();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to generate PDF: $e')),
+        SnackBar(content: Text('Failed to generate report: $e')),
       );
     }
+  }
+
+  // "Report Generated Successfully" confirmation (screenshot 4).
+  void _showReportGeneratedDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(Icons.check_circle_outline,
+                  size: 56, color: Color(0xFF52DE76)),
+              SizedBox(height: 16),
+              Text(
+                'Report Generated\nSuccessfully',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override

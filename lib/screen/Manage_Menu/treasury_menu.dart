@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sams/auth/auth_service.dart';
 import 'package:sams/auth/login_screen.dart';
+import 'package:sams/screen/Fee/Treasury/TreasuryDashboardPage.dart';
 
 class TreasuryMenu extends StatelessWidget {
   const TreasuryMenu({super.key});
@@ -35,7 +36,19 @@ class TreasuryMenu extends StatelessWidget {
                 ),
                 _buildMenuItem(Icons.bookmark_border, 'My Course', context),
                 _buildMenuItem(Icons.emoji_events_outlined, 'My Co-Q', context),
-                _buildMenuItem(Icons.attach_money, 'Student Record', context),
+                _buildMenuItem(
+                  Icons.attach_money,
+                  'Student Record',
+                  context,
+                  onTap: () {
+                    Navigator.pop(context); // close the drawer
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const TreasuryDashboardPage(),
+                      ),
+                    );
+                  },
+                ),
               ],
             ),
           ),
@@ -65,11 +78,16 @@ class TreasuryMenu extends StatelessWidget {
     );
   }
 
-  Widget _buildMenuItem(IconData icon, String title, BuildContext context) {
+  Widget _buildMenuItem(
+    IconData icon,
+    String title,
+    BuildContext context, {
+    VoidCallback? onTap,
+  }) {
     return ListTile(
       leading: Icon(icon, color: Colors.black),
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
-      onTap: () => Navigator.pop(context),
+      onTap: onTap ?? () => Navigator.pop(context),
     );
   }
 }
