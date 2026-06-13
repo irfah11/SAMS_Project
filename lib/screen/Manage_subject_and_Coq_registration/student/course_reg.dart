@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sams/screen/Manage_Menu/student_menu.dart';
 
 class CourseRegScreen extends StatefulWidget {
   final String semester;
@@ -19,6 +20,8 @@ class _CourseRegScreenState extends State<CourseRegScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+      drawer: const StudentDrawer(),
+
       appBar: AppBar(
         backgroundColor: const Color(0xFF64D2EC),
         elevation: 0,
@@ -35,10 +38,17 @@ class _CourseRegScreenState extends State<CourseRegScreen> {
           ),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.menu, color: Colors.black, size: 28),
-            onPressed: () {},
+          Builder(
+            builder: (context) {
+              return IconButton(
+                icon: const Icon(Icons.menu, color: Colors.black, size: 32),
+                onPressed: () {
+                  Scaffold.of(context).openDrawer();
+                },
+              );
+            },
           ),
+          const SizedBox(width: 4),
         ],
       ),
       body: SingleChildScrollView(
