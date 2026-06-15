@@ -410,19 +410,8 @@ class FeeController {
   }
 
   // ===============================================================
-  // Helpers not in the SDD (kept at the bottom)
+  // Private helpers (implementation detail — not part of the SDD API)
   // ===============================================================
-
-  /// Group transactions by academic year, preserving recency order.
-  static List<MapEntry<String, List<Transaction>>> groupByYear(
-    List<Transaction> txs,
-  ) {
-    final map = <String, List<Transaction>>{};
-    for (final t in txs) {
-      map.putIfAbsent(t.academicYear, () => []).add(t);
-    }
-    return map.entries.toList();
-  }
 
   // Build a human-readable receipt number, e.g. "RP2605-43187".
   static String _generateTransactionId(DateTime now) {

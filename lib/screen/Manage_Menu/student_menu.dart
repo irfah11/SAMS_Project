@@ -207,32 +207,25 @@ class StudentDrawer extends StatelessWidget {
                 'Logout',
                 style: TextStyle(color: Colors.red, fontSize: 15),
               ),
-              onTap: () {
-                Navigator.pop(context);
-                showDialog(
-                  context: context,
-                  builder: (_) => AlertDialog(
+              onTap: () async {
+                // Capture the root navigator BEFORE closing the drawer — after
+                // the drawer is popped its own context is defunct, which is why
+                // the dialog/logout previously did nothing.
+                final navigator = Navigator.of(context, rootNavigator: true);
+                Navigator.pop(context); // close the drawer
+
+                final confirmed = await showDialog<bool>(
+                  context: navigator.context,
+                  builder: (dialogCtx) => AlertDialog(
                     title: const Text('Logout'),
                     content: const Text('Are you sure you want to logout?'),
                     actions: [
                       TextButton(
-                        onPressed: () => Navigator.pop(context),
+                        onPressed: () => Navigator.pop(dialogCtx, false),
                         child: const Text('Cancel'),
                       ),
                       ElevatedButton(
-                        onPressed: () async {
-                          Navigator.pop(context);
-                          await AuthService().logout();
-                          if (context.mounted) {
-                            Navigator.pushAndRemoveUntil(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const LoginScreen(),
-                              ),
-                              (route) => false,
-                            );
-                          }
-                        },
+                        onPressed: () => Navigator.pop(dialogCtx, true),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.red,
                           foregroundColor: Colors.white,
@@ -242,6 +235,14 @@ class StudentDrawer extends StatelessWidget {
                     ],
                   ),
                 );
+
+                if (confirmed == true) {
+                  await AuthService().logout();
+                  navigator.pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    (route) => false,
+                  );
+                }
               },
             ),
             const SizedBox(height: 8),

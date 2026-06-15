@@ -31,6 +31,17 @@ class _TransactionPageState extends State<TransactionPage> {
   Future<List<Transaction>> getHistory() =>
       FeeController.getTransactionHistory(widget.studentId);
 
+  // Group transactions by academic year for display (presentation helper).
+  List<MapEntry<String, List<Transaction>>> _groupByYear(
+    List<Transaction> txs,
+  ) {
+    final map = <String, List<Transaction>>{};
+    for (final t in txs) {
+      map.putIfAbsent(t.academicYear, () => []).add(t);
+    }
+    return map.entries.toList();
+  }
+
   void navigateToDetails(Transaction tx) {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -72,8 +83,7 @@ class _TransactionPageState extends State<TransactionPage> {
                     );
                   }
 
-                  final grouped =
-                      FeeController.groupByYear(txs);
+                  final grouped = _groupByYear(txs);
 
                   return SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
