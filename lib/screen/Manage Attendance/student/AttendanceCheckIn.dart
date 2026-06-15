@@ -43,9 +43,6 @@ class _AttendanceCheckInScreenState
   Position? _position;
   double? _distanceMeters;
 
-  String get _desc =>
-      widget.sessionData['session_description'] as String? ?? '-';
-
   GeoPoint? get _sessionLocation =>
       widget.sessionData['session_location'] as GeoPoint?;
 
@@ -53,6 +50,15 @@ class _AttendanceCheckInScreenState
       (widget.sessionData['radius_meters'] as num?)?.toDouble() ?? 100;
 
   bool get _isOnline => widget.sessionData['is_online'] as bool? ?? false;
+
+  static const _weekdays = [
+    'Monday', 'Tuesday', 'Wednesday', 'Thursday',
+    'Friday', 'Saturday', 'Sunday'
+  ];
+  static const _months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ];
 
   @override
   void initState() {
@@ -119,31 +125,18 @@ class _AttendanceCheckInScreenState
     }
   }
 
-  String _locationStatusMessage() {
-    switch (_locationStatus) {
-      case _LocationStatus.serviceDisabled:
-        return 'Location services are turned off. Please enable GPS and try again.';
-      case _LocationStatus.permissionDenied:
-        return 'Location permission is required to check in. Please grant permission and try again.';
-      case _LocationStatus.outOfRange:
-        return 'Your location for Check-In is out of range.';
-      case _LocationStatus.error:
-        return 'Could not determine your location. Please try again.';
-      case _LocationStatus.checking:
-      case _LocationStatus.withinRange:
-      case _LocationStatus.notRequired:
-        return 'You are not within the class location. Attendance not recorded.';
-    }
+  /// e.g. "Thursday, 2 Apr 2026"
+  String _fmtDateLong(dynamic ts) {
+    if (ts is! Timestamp) return '-';
+    final d = ts.toDate();
+    return '${_weekdays[d.weekday - 1]}, ${d.day} ${_months[d.month - 1]} ${d.year}';
   }
 
-  String _fmtTs(dynamic ts) {
-    if (ts == null) return '-';
-    if (ts is Timestamp) {
-      final d = ts.toDate();
-      return '${d.hour.toString().padLeft(2, '0')}:'
-          '${d.minute.toString().padLeft(2, '0')}';
-    }
-    return ts.toString();
+  String _fmtTime(dynamic ts) {
+    if (ts is! Timestamp) return '-';
+    final d = ts.toDate();
+    return '${d.hour.toString().padLeft(2, '0')}:'
+        '${d.minute.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -158,20 +151,9 @@ class _AttendanceCheckInScreenState
   Future<void> verifyCheckIn() async {
     final entered = inputCode();
 
-    final locationOk = _locationStatus == _LocationStatus.notRequired ||
-        (_locationStatus == _LocationStatus.withinRange && _position != null);
-    if (!locationOk) {
-      displayStatus(
-          success: false,
-          message: _locationStatusMessage(),
-          icon: Icons.gps_off);
-      return;
-    }
     if (entered.isEmpty) {
       displayStatus(
-          success: false,
-          message: 'Please enter the class code.',
-          icon: Icons.warning_amber);
+          success: false, message: 'Please enter the class code.');
       return;
     }
 
@@ -199,62 +181,79 @@ class _AttendanceCheckInScreenState
 
       if (mounted) {
         setState(() => _isLoading = false);
-        displayStatus(
-          success: result.success,
-          message: result.message,
-          icon: result.success
-              ? Icons.check_circle_outline
-              : Icons.cancel_outlined,
-        );
+        displayStatus(success: result.success, message: result.message);
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        displayStatus(
-            success: false,
-            message: 'An error occurred: $e',
-            icon: Icons.error_outline);
+        displayStatus(success: false, message: 'An error occurred: $e');
       }
     }
   }
 
-  void displayStatus(
-      {required bool success,
-      required String message,
-      required IconData icon}) {
+  /// Result popup overlaying the screen (Figs 3.5.57 / 3.5.58 / 3.5.59).
+  void displayStatus({required bool success, required String message}) {
+    final isOutOfRange = !success &&
+        _locationStatus == _LocationStatus.outOfRange &&
+        _distanceMeters != null;
+
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon,
-              size: 64,
-              color: success
-                  ? Colors.green.shade600
-                  : Colors.red.shade600),
-          const SizedBox(height: 16),
-          Text(
+      barrierDismissible: false,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(
+              success ? Icons.check_circle_outline : Icons.cancel_outlined,
+              size: 56,
+              color: success ? Colors.green.shade600 : Colors.red.shade600,
+            ),
+            const SizedBox(height: 14),
+            Text(
               success
                   ? 'Attendance Check-In Successful'
                   : 'Attendance Check-In Failed',
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                  fontSize: 16, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Text(message,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 14, color: Colors.black54)),
-        ]),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              if (success) Navigator.pop(context);
-            },
-            child: const Text('OK'),
-          ),
-        ],
+              style: const TextStyle(fontSize: 12, color: Colors.black54),
+            ),
+            // Distance shown ONLY on an invalid (out-of-range) check-in.
+            if (isOutOfRange) ...[
+              const SizedBox(height: 12),
+              Text(
+                'You are ${_distanceMeters!.toStringAsFixed(0)} m from the class '
+                'location (must be within ${_radiusMeters.toStringAsFixed(0)} m).',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 11, color: Colors.red.shade700),
+              ),
+            ],
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  if (success) Navigator.pop(context);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF5CE1E6),
+                  foregroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6)),
+                ),
+                child: const Text('OK'),
+              ),
+            ),
+          ]),
+        ),
       ),
     );
   }
@@ -263,7 +262,8 @@ class _AttendanceCheckInScreenState
   Widget build(BuildContext context) {
     final startTs = widget.sessionData['start_time'];
     final endTs   = widget.sessionData['end_time'];
-    final timeStr = '${_fmtTs(startTs)} — ${_fmtTs(endTs)}';
+    final dateStr = _fmtDateLong(startTs);
+    final timeStr = '${_fmtTime(startTs)} — ${_fmtTime(endTs)}';
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -286,56 +286,42 @@ class _AttendanceCheckInScreenState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: const [
-              Icon(Icons.people_outline, size: 40),
+              Icon(Icons.people_outline, size: 32),
               SizedBox(width: 10),
-              Text('Manage Attendance',
+              Text('Manage  Attendance',
                   style: TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w500)),
+                      fontSize: 20, fontWeight: FontWeight.w500)),
             ]),
-            const SizedBox(height: 6),
-            Text(widget.subjectName,
-                style: const TextStyle(
-                    fontSize: 14, color: Colors.black54)),
-            if (widget.studentId != null) ...[
-              const SizedBox(height: 2),
-              Text('Student ID: ${widget.studentId}',
+            const SizedBox(height: 12),
+            Center(
+              child: Text(widget.subjectName,
+                  textAlign: TextAlign.center,
                   style: const TextStyle(
-                      fontSize: 12, color: Colors.black38)),
-            ],
-            const SizedBox(height: 24),
-
-            // Session info card
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE0F7FA),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFF5CE1E6)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(_desc,
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 8),
-                  Row(children: [
-                    const Icon(Icons.access_time,
-                        size: 16, color: Colors.black54),
-                    const SizedBox(width: 6),
-                    Text(timeStr,
-                        style: const TextStyle(
-                            fontSize: 13, color: Colors.black87)),
-                  ]),
-                ],
-              ),
+                      fontSize: 16, fontWeight: FontWeight.w600)),
             ),
             const SizedBox(height: 28),
 
-            // GPS status
-            _buildLocationCard(),
+            // Selected session date + time
+            Center(
+              child: Column(children: [
+                Text(dateStr,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 4),
+                Text(timeStr,
+                    style: const TextStyle(
+                        fontSize: 13, color: Colors.black54)),
+              ]),
+            ),
             const SizedBox(height: 28),
+
+            // GPS status — only show when there's a location issue
+            if (_locationStatus != _LocationStatus.withinRange &&
+                _locationStatus != _LocationStatus.notRequired) ...[
+              _buildLocationCard(),
+              const SizedBox(height: 24),
+            ],
 
             // Class code field
             const Text('Class Code',
@@ -346,50 +332,48 @@ class _AttendanceCheckInScreenState
               controller: _codeController,
               textCapitalization: TextCapitalization.characters,
               decoration: InputDecoration(
-                hintText: 'Enter 6-character code (e.g. QWE123)',
+                hintText: 'Value',
                 hintStyle: const TextStyle(
-                    fontSize: 13, color: Colors.black38),
+                    fontSize: 14, color: Colors.black38),
                 border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8)),
+                    borderRadius: BorderRadius.circular(6)),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(6),
                   borderSide: const BorderSide(
                       color: Color(0xFF5CE1E6), width: 2),
                 ),
-                prefixIcon:
-                    const Icon(Icons.keyboard, color: Colors.black54),
               ),
               style: const TextStyle(
-                  fontSize: 20,
+                  fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  letterSpacing: 4),
+                  letterSpacing: 3),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 28),
 
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                onPressed: (_isLoading ||
-                        (_locationStatus != _LocationStatus.withinRange &&
-                            _locationStatus != _LocationStatus.notRequired))
-                    ? null
-                    : verifyCheckIn,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF5CE1E6),
-                  foregroundColor: Colors.black,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
+            // Save button (green, centered like the wireframe)
+            Center(
+              child: SizedBox(
+                width: 130,
+                height: 42,
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : verifyCheckIn,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4CAF50),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6)),
+                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
+                      : const Text('Save',
+                          style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600)),
                 ),
-                child: _isLoading
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('Enter',
-                        style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600)),
               ),
             ),
           ],
@@ -412,15 +396,6 @@ class _AttendanceCheckInScreenState
         fg = Colors.black54;
         message = 'Checking your location...';
         showRetry = false;
-        break;
-      case _LocationStatus.withinRange:
-        icon = Icons.gps_fixed;
-        bg = const Color(0xFFE8F5E9);
-        border = Colors.green.shade300;
-        fg = Colors.green.shade800;
-        message = _distanceMeters != null
-            ? 'Location verified — ${_distanceMeters!.toStringAsFixed(0)} m from class location.'
-            : 'Location verified.';
         break;
       case _LocationStatus.outOfRange:
         icon = Icons.gps_off;
@@ -452,14 +427,9 @@ class _AttendanceCheckInScreenState
         fg = Colors.red.shade800;
         message = 'Could not get your location. Please try again.';
         break;
+      case _LocationStatus.withinRange:
       case _LocationStatus.notRequired:
-        icon = Icons.wifi;
-        bg = const Color(0xFFE0F7FA);
-        border = const Color(0xFF5CE1E6);
-        fg = Colors.black54;
-        message = 'Online class — location check not required.';
-        showRetry = false;
-        break;
+        return const SizedBox.shrink();
     }
 
     return Container(

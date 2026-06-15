@@ -28,8 +28,8 @@ class _DeleteAttendanceScreenState extends State<DeleteAttendanceScreen> {
         .collection('AttendanceSession')
         .doc(widget.sessionId)
         .get();
-    final status = doc.data()?['session_status'] as String? ?? '';
-    return status != 'Passed';
+    if (!doc.exists) return false;
+    return AttendanceController.effectiveStatus(doc.data()!) != 'Passed';
   }
 
   /// SDD cancelSession() — delete the session and its attendance records.
