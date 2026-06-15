@@ -6,3 +6,4 @@ node_modules/
 .secret.local
 *.log
 .runtimeconfig.json
+serviceAccountKey.json

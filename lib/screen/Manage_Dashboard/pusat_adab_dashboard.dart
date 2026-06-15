@@ -1,20 +1,55 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../../auth/auth_service.dart';
+import '../../auth/login_screen.dart';
 
 import '../Manage_Menu/pusat_adab_menu.dart';
 
 class PusatAdabDashboard extends StatelessWidget {
   const PusatAdabDashboard({super.key});
 
+  void _logout(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await AuthService().logout();
+              if (context.mounted) {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  (route) => false,
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      // Placeholder for the Pusat Adab specific menu
       drawer: const PusatAdabMenu(),
       appBar: AppBar(
-        backgroundColor: const Color(
-          0xFF965E5E,
-        ), // Maroon/Brown shade from your mockup
+        backgroundColor: const Color(0xFF965E5E),
         elevation: 0,
         automaticallyImplyLeading: false,
         title: const Text(
@@ -27,12 +62,15 @@ class PusatAdabDashboard extends StatelessWidget {
           ),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.logout, color: Colors.black),
+            tooltip: 'Logout',
+            onPressed: () => _logout(context),
+          ),
           Builder(
             builder: (context) => IconButton(
               icon: const Icon(Icons.menu, color: Colors.black, size: 32),
-              onPressed: () {
-                Scaffold.of(context).openDrawer();
-              },
+              onPressed: () => Scaffold.of(context).openDrawer(),
             ),
           ),
         ],
@@ -44,20 +82,32 @@ class PusatAdabDashboard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 10),
-
-              // 1. Profile & Welcome Section
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Welcome Back,\nNURUL BALQIS',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                      height: 1.2,
-                      fontFamily:
-                          'Serif', // Matches the stylized font in the image
+                  Flexible(
+                    child: FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                      future: FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(FirebaseAuth.instance.currentUser!.uid)
+                          .get(),
+                      builder: (context, snapshot) {
+                        String name = 'Pusat Adab';
+                        if (snapshot.hasData && snapshot.data!.exists) {
+                          name = (snapshot.data!.data()?['name'] ?? 'Pusat Adab')
+                              .toString();
+                        }
+                        return Text(
+                          'Welcome Back,\n${name.toUpperCase()}',
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black,
+                            height: 1.2,
+                            fontFamily: 'Serif',
+                          ),
+                        );
+                      },
                     ),
                   ),
                   ClipOval(
@@ -80,16 +130,12 @@ class PusatAdabDashboard extends StatelessWidget {
                   ),
                 ],
               ),
-
               const SizedBox(height: 25),
-
-              // 2. Event Banners
               _buildEventBanner('assets/Mobility.jpg'),
               const SizedBox(height: 15),
               _buildEventBanner('assets/LarianAmal.jpg'),
               const SizedBox(height: 15),
               _buildEventBanner('assets/Programming.jpg'),
-
               const SizedBox(height: 20),
             ],
           ),
@@ -98,7 +144,6 @@ class PusatAdabDashboard extends StatelessWidget {
     );
   }
 
-  // Helper function to maintain consistent banner styling
   Widget _buildEventBanner(String imagePath) {
     return Container(
       width: double.infinity,
@@ -106,7 +151,7 @@ class PusatAdabDashboard extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withAlpha(13),
             blurRadius: 5,
             offset: const Offset(0, 2),
           ),

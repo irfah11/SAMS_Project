@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-
-import 'package:sams/auth/auth_service.dart';
-import 'package:sams/auth/login_screen.dart';
+import '../Manage Attendance/Lecturer/Co-QSubject.dart';
 import '../Manage_subject_and_Coq_registration/Lecturer/approval_reg.dart';
+import '../../auth/auth_service.dart';
+import '../../auth/login_screen.dart';
 
 class LecturerDrawer extends StatelessWidget {
   const LecturerDrawer({super.key});
@@ -116,7 +116,13 @@ class LecturerDrawer extends StatelessWidget {
                         'Manage Attendance',
                         onTap: () {
                           Navigator.pop(context);
-                          // Navigator.push logic for Manage Attendance goes here
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  const LecturerCoQSubjectScreen(),
+                            ),
+                          );
                         },
                       ),
                     ],
@@ -130,27 +136,51 @@ class LecturerDrawer extends StatelessWidget {
                 ],
               ),
             ),
+            // Logout at bottom of drawer
             const Divider(height: 1, color: Color(0xFFCCCCCC)),
             ListTile(
-              leading: const Icon(Icons.logout, color: Colors.red),
+              leading: const Icon(Icons.logout, color: Colors.red, size: 26),
               title: const Text(
                 'Logout',
-                style: TextStyle(
-                  color: Colors.red,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(color: Colors.red, fontSize: 15),
               ),
-              onTap: () async {
-                final navigator = Navigator.of(context);
-                await AuthService().logout();
-                navigator.pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                  (route) => false,
+              onTap: () {
+                Navigator.pop(context);
+                showDialog(
+                  context: context,
+                  builder: (_) => AlertDialog(
+                    title: const Text('Logout'),
+                    content: const Text('Are you sure you want to logout?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Cancel'),
+                      ),
+                      ElevatedButton(
+                        onPressed: () async {
+                          Navigator.pop(context);
+                          await AuthService().logout();
+                          if (context.mounted) {
+                            Navigator.pushAndRemoveUntil(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const LoginScreen()),
+                              (route) => false,
+                            );
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Logout'),
+                      ),
+                    ],
+                  ),
                 );
               },
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
           ],
         ),
       ),

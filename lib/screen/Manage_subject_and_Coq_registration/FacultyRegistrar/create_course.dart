@@ -228,7 +228,7 @@ class _CreateCourseState extends State<CreateCourse> {
                             ),
                           ),
                           hint: const Text("Select Lecturer"),
-                          value: _selectedLecturerName,
+                          initialValue: _selectedLecturerName,
                           items: lecturerItems,
                           onChanged: (value) {
                             setState(() {
