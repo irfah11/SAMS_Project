@@ -25,8 +25,12 @@ class _FeePageState extends State<FeePage> {
   @override
   void initState() {
     super.initState();
-    _feeFuture = FeeController.fetchCurrentFees(widget.studentId);
+    _feeFuture = fetchCurrentFees();
   }
+
+  // fetchCurrentFees() — SDD-REQ-301: load this student's current fee record.
+  Future<Fee> fetchCurrentFees() =>
+      FeeController.getFeeRecord(widget.studentId);
 
   void navigateToPayment(Fee fee) {
     Navigator.of(context).push(MaterialPageRoute(

@@ -1,68 +1,14 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import 'package:sams/Controller/Fee/FeeController.dart';
 import 'package:sams/screen/Fee/Student/FeePage.dart' show SamsHeader;
 
 import 'StudentRecordPage.dart';
 import 'TreasuryDashboardPage.dart' show kTreasuryGreen;
 
 // =============================================================
-// MODEL — OverdueStudent
-// =============================================================
-class OverdueStudent {
-  final String studentId;
-  final String fullName;
-  final String accessStatus;
-  final String paymentStatus;
-
-  const OverdueStudent({
-    required this.studentId,
-    required this.fullName,
-    required this.accessStatus,
-    required this.paymentStatus,
-  });
-}
-
-// =============================================================
-// CONTROLLER — FeeController.getOverdueList()  [SDD-REQ-308]
-// =============================================================
-class OverdueController {
-  static Future<List<OverdueStudent>> getOverdueList() async {
-    final db = FirebaseFirestore.instance;
-    final feeSnap = await db
-        .collection('Fee')
-        .where('payment_status', isEqualTo: 'Overdue')
-        .get();
-
-    final ids = feeSnap.docs
-        .map((d) => (d.data()['student_id'] ?? '').toString())
-        .toList();
-
-    // Fetch student names in one batched read.
-    final nameById = <String, String>{};
-    if (ids.isNotEmpty) {
-      final studentSnap = await db.collection('student').get();
-      for (final d in studentSnap.docs) {
-        final sid = (d.data()['student_id'] ?? d.id).toString();
-        nameById[sid] = (d.data()['full_name'] ?? '-').toString();
-      }
-    }
-
-    return feeSnap.docs.map((d) {
-      final data = d.data();
-      final sid = (data['student_id'] ?? '').toString();
-      return OverdueStudent(
-        studentId: sid,
-        fullName: nameById[sid] ?? (data['student_name'] ?? '-').toString(),
-        accessStatus: (data['access_status'] ?? 'Unblocked').toString(),
-        paymentStatus: (data['payment_status'] ?? 'Overdue').toString(),
-      );
-    }).toList();
-  }
-}
-
-// =============================================================
 // BOUNDARY CLASS — OverdueStudent_Page  [SDD-REQ-307]
+// Methods: loadOverdueList(), toggleAcademicAccess(), sendOverdueNotification()
 // =============================================================
 class OverdueStudentPage extends StatefulWidget {
   const OverdueStudentPage({super.key});
@@ -73,6 +19,7 @@ class OverdueStudentPage extends StatefulWidget {
 
 class _OverdueStudentPageState extends State<OverdueStudentPage> {
   late Future<List<OverdueStudent>> _future;
+  bool _working = false;
 
   @override
   void initState() {
@@ -80,10 +27,44 @@ class _OverdueStudentPageState extends State<OverdueStudentPage> {
     loadOverdueList();
   }
 
+  // loadOverdueList() — SDD-REQ-307: all students with an Overdue fee.
   void loadOverdueList() {
     setState(() {
-      _future = OverdueController.getOverdueList();
+      _future = FeeController.getOverdueList();
     });
+  }
+
+  // toggleAcademicAccess() — SDD-REQ-307: block/unblock then notify.
+  Future<void> toggleAcademicAccess(OverdueStudent s) async {
+    if (_working) return;
+    setState(() => _working = true);
+
+    final newStatus = await FeeController.toggleAccessStatus(
+      studentId: s.studentId,
+      currentStatus: s.accessStatus,
+    );
+    await sendOverdueNotification(
+      studentId: s.studentId,
+      accessStatus: newStatus,
+      paymentStatus: s.paymentStatus,
+    );
+
+    if (!mounted) return;
+    setState(() => _working = false);
+    loadOverdueList(); // refresh badges
+  }
+
+  // sendOverdueNotification() — SDD-REQ-307: notify the student.
+  Future<void> sendOverdueNotification({
+    required String studentId,
+    required String accessStatus,
+    required String paymentStatus,
+  }) {
+    return FeeController.sendOverdueNotification(
+      studentId: studentId,
+      accessStatus: accessStatus,
+      paymentStatus: paymentStatus,
+    );
   }
 
   void _openRecord(OverdueStudent s) {
@@ -91,7 +72,6 @@ class _OverdueStudentPageState extends State<OverdueStudentPage> {
         .push(MaterialPageRoute(
           builder: (_) => StudentRecordPage(studentId: s.studentId),
         ))
-        // re-fetch on return so block/unblock changes are reflected
         .then((_) => loadOverdueList());
   }
 
@@ -150,12 +130,17 @@ class _OverdueStudentPageState extends State<OverdueStudentPage> {
                           const Padding(
                             padding: EdgeInsets.symmetric(vertical: 24),
                             child: Center(
-                              child: Text('No overdue students. 🎉'),
+                              child: Text('No overdue students.'),
                             ),
                           )
                         else
                           for (final s in list)
-                            _OverdueTile(student: s, onTap: () => _openRecord(s)),
+                            _OverdueTile(
+                              student: s,
+                              working: _working,
+                              onOpen: () => _openRecord(s),
+                              onToggle: () => toggleAcademicAccess(s),
+                            ),
                       ],
                     ),
                   );
@@ -171,24 +156,31 @@ class _OverdueStudentPageState extends State<OverdueStudentPage> {
 
 class _OverdueTile extends StatelessWidget {
   final OverdueStudent student;
-  final VoidCallback onTap;
-  const _OverdueTile({required this.student, required this.onTap});
+  final bool working;
+  final VoidCallback onOpen;
+  final VoidCallback onToggle;
+  const _OverdueTile({
+    required this.student,
+    required this.working,
+    required this.onOpen,
+    required this.onToggle,
+  });
 
   @override
   Widget build(BuildContext context) {
     final blocked = student.accessStatus.toLowerCase() == 'blocked';
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: const BoxDecoration(
-          border: Border(
-            bottom: BorderSide(color: Color(0xFFEEEEEE), width: 0.5),
-          ),
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: const BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: Color(0xFFEEEEEE), width: 0.5),
         ),
-        child: Row(
-          children: [
-            Expanded(
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: InkWell(
+              onTap: onOpen,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -203,33 +195,42 @@ class _OverdueTile extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     student.studentId,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: Colors.black54,
-                    ),
+                    style: const TextStyle(fontSize: 11, color: Colors.black54),
                   ),
                 ],
               ),
             ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: blocked
-                    ? const Color(0xFFFCE4E4)
-                    : const Color(0xFFFFF7C2),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                student.accessStatus,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: blocked ? Colors.redAccent : Colors.black87,
-                ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: blocked
+                  ? const Color(0xFFFCE4E4)
+                  : const Color(0xFFFFF7C2),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              student.accessStatus,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: blocked ? Colors.redAccent : Colors.black87,
               ),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: working ? null : onToggle,
+            style: TextButton.styleFrom(
+              minimumSize: const Size(0, 32),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+            ),
+            child: Text(
+              blocked ? 'Unblock' : 'Block',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
       ),
     );
   }
