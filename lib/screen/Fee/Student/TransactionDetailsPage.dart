@@ -24,8 +24,12 @@ class _TransactionDetailsPageState extends State<TransactionDetailsPage> {
   @override
   void initState() {
     super.initState();
-    _future = FeeController.fetchReceiptData(widget.transaction);
+    _future = viewReceipt();
   }
+
+  // viewReceipt() — SDD-REQ-304: load the full receipt for this transaction.
+  Future<ReceiptData> viewReceipt() =>
+      FeeController.getTransactionDetails(widget.transaction);
 
   @override
   Widget build(BuildContext context) {

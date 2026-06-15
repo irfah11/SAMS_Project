@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'auth_service.dart';
 import 'register_screen.dart';
 
-import 'package:sams/screen/Manage_Dashboard/treasury_dashboard.dart';
+import 'package:sams/screen/Fee/Treasury/TreasuryDashboardPage.dart';
 import 'package:sams/screen/Manage_Dashboard/student_dashboard.dart';
 import 'package:sams/screen/Manage_Dashboard/lecturer_dashboard.dart';
 import 'package:sams/screen/Manage_Dashboard/pusat_adab_dashboard.dart';
@@ -64,7 +64,7 @@ class _LoginScreenState extends State<LoginScreen> {
       case 'treasury':
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => TreasuryDashboard()),
+          MaterialPageRoute(builder: (context) => const TreasuryDashboardPage()),
         );
         break;
       default:

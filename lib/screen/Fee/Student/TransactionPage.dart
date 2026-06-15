@@ -24,10 +24,14 @@ class _TransactionPageState extends State<TransactionPage> {
   @override
   void initState() {
     super.initState();
-    _future = FeeController.fetchTransactions(widget.studentId);
+    _future = getHistory();
   }
 
-  void navigateToTransactionDetails(Transaction tx) {
+  // getHistory() — SDD-REQ-303: load this student's transaction history.
+  Future<List<Transaction>> getHistory() =>
+      FeeController.getTransactionHistory(widget.studentId);
+
+  void navigateToDetails(Transaction tx) {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => TransactionDetailsPage(transaction: tx),
@@ -100,7 +104,7 @@ class _TransactionPageState extends State<TransactionPage> {
                           for (final tx in group.value)
                             _TransactionTile(
                               tx: tx,
-                              onTap: () => navigateToTransactionDetails(tx),
+                              onTap: () => navigateToDetails(tx),
                             ),
                           const SizedBox(height: 16),
                         ],

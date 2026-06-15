@@ -7,7 +7,7 @@ import '../screen/Manage_Dashboard/student_dashboard.dart';
 import '../screen/Manage_Dashboard/lecturer_dashboard.dart';
 import '../screen/Manage_Dashboard/faculty_registrar_dashboard.dart';
 import '../screen/Manage_Dashboard/pusat_adab_dashboard.dart';
-import '../screen/Manage_Dashboard/treasury_dashboard.dart';
+import '../screen/Fee/Treasury/TreasuryDashboardPage.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -79,7 +79,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           nextScreen = const PusatAdabDashboard();
           break;
         case 'treasury':
-          nextScreen = const TreasuryDashboard();
+          nextScreen = const TreasuryDashboardPage();
           break;
         case 'student':
         default:
