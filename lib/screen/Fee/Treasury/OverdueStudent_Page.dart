@@ -1,65 +1,10 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import 'package:sams/Controller/Fee/FeeController.dart';
 import 'package:sams/screen/Fee/Student/FeePage.dart' show SamsHeader;
 
 import 'StudentRecordPage.dart';
 import 'TreasuryDashboardPage.dart' show kTreasuryGreen;
-
-// =============================================================
-// MODEL — OverdueStudent
-// =============================================================
-class OverdueStudent {
-  final String studentId;
-  final String fullName;
-  final String accessStatus;
-  final String paymentStatus;
-
-  const OverdueStudent({
-    required this.studentId,
-    required this.fullName,
-    required this.accessStatus,
-    required this.paymentStatus,
-  });
-}
-
-// =============================================================
-// CONTROLLER — FeeController.getOverdueList()  [SDD-REQ-308]
-// =============================================================
-class OverdueController {
-  static Future<List<OverdueStudent>> getOverdueList() async {
-    final db = FirebaseFirestore.instance;
-    final feeSnap = await db
-        .collection('Fee')
-        .where('payment_status', isEqualTo: 'Overdue')
-        .get();
-
-    final ids = feeSnap.docs
-        .map((d) => (d.data()['student_id'] ?? '').toString())
-        .toList();
-
-    // Fetch student names in one batched read.
-    final nameById = <String, String>{};
-    if (ids.isNotEmpty) {
-      final studentSnap = await db.collection('student').get();
-      for (final d in studentSnap.docs) {
-        final sid = (d.data()['student_id'] ?? d.id).toString();
-        nameById[sid] = (d.data()['full_name'] ?? '-').toString();
-      }
-    }
-
-    return feeSnap.docs.map((d) {
-      final data = d.data();
-      final sid = (data['student_id'] ?? '').toString();
-      return OverdueStudent(
-        studentId: sid,
-        fullName: nameById[sid] ?? (data['student_name'] ?? '-').toString(),
-        accessStatus: (data['access_status'] ?? 'Unblocked').toString(),
-        paymentStatus: (data['payment_status'] ?? 'Overdue').toString(),
-      );
-    }).toList();
-  }
-}
 
 // =============================================================
 // BOUNDARY CLASS — OverdueStudent_Page  [SDD-REQ-307]

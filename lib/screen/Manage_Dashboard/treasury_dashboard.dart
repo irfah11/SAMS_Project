@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../Manage_Menu/treasury_menu.dart';
-import '../Fee/Treasury/TreasuryDashboardPage.dart'
+import 'package:sams/Controller/Fee/FeeController.dart'
     show TreasuryController, DashboardStats, StudentRow;
 
 class TreasuryDashboard extends StatefulWidget {
