@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:sams/Controller/Manage_Coq_and_Subject_Registration/RegistrationController.dart';
 import 'package:sams/Domain/registration_subject.dart';
 import 'package:sams/screen/Manage_Menu/student_menu.dart';
+import 'course_reg.dart';
 
 class CourseRegApprovalScreen extends StatefulWidget {
   final String semester;
@@ -16,15 +17,12 @@ class CourseRegApprovalScreen extends StatefulWidget {
 }
 
 class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
-  // 1. ID Pelajar aktif berdasarkan String unik pangkalan data Firebase
   final String currentStudentId = "CB23041";
 
-  // Pembolehubah untuk menyimpan maklumat profil pelajar dari database secara dinamik
   String studentName = "Loading...";
   String studentProgramme = "Loading...";
   String studentAdvisor = "Loading...";
 
-  // Pembolehubah untuk menjejak pilihan dropdown subjek
   List<QueryDocumentSnapshot> _allFacultyCourses = [];
   String? _selectedSubjectId;
   String? _selectedSection;
@@ -39,55 +37,60 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
     _fetchStudentProfile();
   }
 
-  // 2. Fungsi membaca dokumen profil dari koleksi 'student'
   void _fetchStudentProfile() async {
     try {
-      var studentQuery = await FirebaseFirestore.instance
+      final studentQuery = await FirebaseFirestore.instance
           .collection('student')
           .where('student_id', isEqualTo: currentStudentId)
           .get();
 
       if (studentQuery.docs.isNotEmpty && mounted) {
-        var data = studentQuery.docs.first.data();
+        final data = studentQuery.docs.first.data();
+
         setState(() {
           studentName = data['full_name'] ?? 'No Name';
           studentProgramme = data['programme'] ?? 'No Programme';
           studentAdvisor = data['advisor_name'] ?? 'No Advisor';
         });
       } else {
+        if (!mounted) return;
+
         setState(() {
           studentName = "Pelajar Tidak Dijumpai";
           studentProgramme = "Sila semak ID";
-          studentAdvisor = "CB23041";
+          studentAdvisor = currentStudentId;
         });
       }
     } catch (e) {
+      if (!mounted) return;
+
       setState(() {
         studentName = "Ralat: $e";
       });
     }
   }
 
-  // Fungsi menyimpan pendaftaran subjek dan terus dipaparkan pada jadual secara real-time
   void _addCourseToApproval() async {
     if (_selectedSubjectId == null ||
         _selectedSection == null ||
-        _selectedLab == null) {
+        _selectedLab == null ||
+        _currentSelectedCourseData == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Sila pilih Course, Section dan Tutorial/Lab!'),
         ),
       );
-
       return;
     }
-    // CHECK DUPLICATE BEFORE SAVE
-    bool alreadyRegistered = await _controller.isSubjectAlreadyRegistered(
+
+    final bool alreadyRegistered = await _controller.isSubjectAlreadyRegistered(
       currentStudentId,
       _selectedSubjectId!,
     );
 
     if (alreadyRegistered) {
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -98,37 +101,47 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
       return;
     }
 
-    String uniqueRegId = '${currentStudentId}_${_selectedSubjectId!}';
+    final String uniqueRegId = '${currentStudentId}_${_selectedSubjectId!}';
 
-    // Menukar String ID "CB23041" kepada Integer untuk memenuhi keperluan jenis data domain model
-    int parsedStudentId =
+    final int parsedStudentId =
         int.tryParse(currentStudentId.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
 
-    RegistrationSubject newReg = RegistrationSubject(
+    final RegistrationSubject newReg = RegistrationSubject(
       regId: uniqueRegId,
-      studentId: parsedStudentId, // Nilai integer untuk entiti model domain
+      studentId: parsedStudentId,
       fullName: studentName,
       programme: studentProgramme,
       advisorName: studentAdvisor,
       semester: int.tryParse(widget.semester) ?? 1,
-      subjectId: _currentSelectedCourseData!['subject_id'] ?? '',
-      subjectName: _currentSelectedCourseData!['subject_name'] ?? '',
+      subjectId:
+          _currentSelectedCourseData!['subject_id'] ??
+          _currentSelectedCourseData!['subjectId'] ??
+          '',
+      subjectName:
+          _currentSelectedCourseData!['subject_name'] ??
+          _currentSelectedCourseData!['subjectName'] ??
+          '',
       section: _selectedSection!,
       tutorialLab: _selectedLab!,
-      creditHour: 3,
+      creditHour: _currentSelectedCourseData!['credit_hour'] is int
+          ? _currentSelectedCourseData!['credit_hour']
+          : int.tryParse(
+                  (_currentSelectedCourseData!['credit_hour'] ?? '3')
+                      .toString(),
+                ) ??
+                3,
       status: 'Pending',
     );
 
     try {
-      // PERUBAHAN UTAMA: Menyimpan transaksi pendaftaran baharu ke Firebase
       await _controller.submitCourseRegistration(newReg);
 
-      // Mengemaskini field 'student_id' secara nyata dalam dokumen transaksi kepada String "CB23041"
-      // supaya sepadan dengan struktur kueri carian getPendingRegistrations()
       await FirebaseFirestore.instance
           .collection('course_registrations')
           .doc(uniqueRegId)
           .update({'student_id': currentStudentId});
+
+      if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -136,7 +149,6 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
         ),
       );
 
-      // Mengosongkan semula pilihan input dropdown selepas berjaya ditambah
       setState(() {
         _selectedSubjectId = null;
         _selectedSection = null;
@@ -144,6 +156,8 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
         _currentSelectedCourseData = null;
       });
     } catch (e) {
+      if (!mounted) return;
+
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Ralat semasa mendaftar: $e')));
@@ -156,7 +170,6 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
       backgroundColor: Colors.white,
       drawer: const StudentDrawer(),
 
-      // SAME AS SCREENSHOT: no back button, SAMS left, menu right
       appBar: AppBar(
         automaticallyImplyLeading: false,
         backgroundColor: const Color(0xFF55D3E7),
@@ -186,11 +199,11 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
           const SizedBox(width: 4),
         ],
       ),
+
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(18, 10, 10, 24),
         child: Column(
           children: [
-            // STUDENT INFO BOX
             Container(
               margin: const EdgeInsets.only(left: 8, right: 2),
               padding: const EdgeInsets.fromLTRB(18, 13, 18, 14),
@@ -221,12 +234,13 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
 
                 _allFacultyCourses = snapshot.data!.docs;
 
-                Set<String> uniqueSubjectIds = {};
-                List<Map<String, dynamic>> uniqueCoursesList = [];
+                final Set<String> uniqueSubjectIds = {};
+                final List<Map<String, dynamic>> uniqueCoursesList = [];
 
-                for (var doc in _allFacultyCourses) {
-                  var data = doc.data() as Map<String, dynamic>;
-                  String sId = data['subject_id'] ?? data['subjectId'] ?? '';
+                for (final doc in _allFacultyCourses) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final String sId =
+                      data['subject_id'] ?? data['subjectId'] ?? '';
 
                   if (sId.isNotEmpty && !uniqueSubjectIds.contains(sId)) {
                     uniqueSubjectIds.add(sId);
@@ -234,12 +248,12 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
                   }
                 }
 
-                List<String> availableSections = [];
-                List<String> availableLabs = [];
+                final List<String> availableSections = [];
+                final List<String> availableLabs = [];
 
                 if (_selectedSubjectId != null) {
-                  for (var doc in _allFacultyCourses) {
-                    var data = doc.data() as Map<String, dynamic>;
+                  for (final doc in _allFacultyCourses) {
+                    final data = doc.data() as Map<String, dynamic>;
 
                     if ((data['subject_id'] ?? data['subjectId']) ==
                         _selectedSubjectId) {
@@ -248,7 +262,7 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
                         availableSections.add(data['section']);
                       }
 
-                      String labKey =
+                      final String labKey =
                           data['tutorial_lab'] ?? data['TutorialLab'] ?? '';
 
                       if (labKey.isNotEmpty &&
@@ -277,9 +291,10 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
                           style: TextStyle(fontSize: 12, color: Colors.grey),
                         ),
                         items: uniqueCoursesList.map((course) {
-                          String sId =
+                          final String sId =
                               course['subject_id'] ?? course['subjectId'] ?? '';
-                          String sName =
+
+                          final String sName =
                               course['subject_name'] ??
                               course['subjectName'] ??
                               'No Name';
@@ -377,7 +392,6 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
 
             const SizedBox(height: 6),
 
-            // ADD BUTTON SAME POSITION AS IMAGE
             Row(
               children: [
                 const SizedBox(width: 85),
@@ -405,12 +419,23 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
 
             const SizedBox(height: 16),
 
-            // TABLE TOP LABELS
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 _buildHeaderLabel("Course Registration\nfor approval", 120),
-                _buildHeaderLabel("Course\nRegistration", 78),
+                _buildHeaderLabel(
+                  "Course\nRegistration",
+                  78,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            CourseRegScreen(semester: widget.semester),
+                      ),
+                    );
+                  },
+                ),
               ],
             ),
 
@@ -424,7 +449,7 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
                   );
                 }
 
-                var registeredList = snapshot.data ?? [];
+                final registeredList = snapshot.data ?? [];
 
                 return Column(
                   children: [
@@ -510,19 +535,26 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
     );
   }
 
-  Widget _buildHeaderLabel(String text, double width) {
-    return Container(
-      width: width,
-      height: 32,
-      decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFFBDBDBD), width: 0.8),
-        color: Colors.white,
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        text,
-        textAlign: TextAlign.center,
-        style: const TextStyle(fontSize: 11, color: Colors.blue, height: 1.05),
+  Widget _buildHeaderLabel(String text, double width, {VoidCallback? onTap}) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        width: width,
+        height: 32,
+        decoration: BoxDecoration(
+          border: Border.all(color: const Color(0xFFBDBDBD), width: 0.8),
+          color: Colors.white,
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          text,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontSize: 11,
+            color: Colors.blue,
+            height: 1.05,
+          ),
+        ),
       ),
     );
   }
@@ -547,14 +579,14 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
             _buildEmptyRow()
           else
             ...List.generate(registeredList.length, (index) {
-              var sub = registeredList[index];
+              final sub = registeredList[index];
 
               return _buildTableRow(
-                (index + 1).toString(),
-                '${sub.subjectId}\n${sub.subjectName}',
-                '${sub.section}\n${sub.tutorialLab}',
-                sub.creditHour.toString(),
-                sub.regId,
+                no: (index + 1).toString(),
+                subject: '${sub.subjectId}\n${sub.subjectName}',
+                section: '${sub.section}\n${sub.tutorialLab}',
+                credit: sub.creditHour.toString(),
+                regId: sub.regId,
               );
             }),
         ],
@@ -614,13 +646,13 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
     );
   }
 
-  TableRow _buildTableRow(
-    String no,
-    String subject,
-    String section,
-    String credit,
-    String regId,
-  ) {
+  TableRow _buildTableRow({
+    required String no,
+    required String subject,
+    required String section,
+    required String credit,
+    required String regId,
+  }) {
     return TableRow(
       children: [
         SizedBox(
@@ -655,7 +687,17 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
               width: 52,
               height: 29,
               child: ElevatedButton(
-                onPressed: () => _controller.dropRegisteredCourse(regId),
+                onPressed: () async {
+                  await _controller.dropRegisteredCourse(regId);
+
+                  if (!mounted) return;
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Subject dropped successfully."),
+                    ),
+                  );
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFE9E9E9),
                   foregroundColor: Colors.black,
@@ -685,14 +727,14 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
   }
 
   Widget _buildBottomControls(List<RegistrationSubject> list) {
-    int totalCredits = list.fold(0, (sum, item) => sum + item.creditHour);
+    final int totalCredits = list.fold(0, (sum, item) => sum + item.creditHour);
 
     return Table(
       border: TableBorder.all(color: const Color(0xFFBDBDBD), width: 0.8),
       columnWidths: const {
         0: FlexColumnWidth(),
         1: FixedColumnWidth(45),
-        2: FixedColumnWidth(58),
+        2: FixedColumnWidth(70),
       },
       defaultVerticalAlignment: TableCellVerticalAlignment.middle,
       children: [
@@ -724,7 +766,7 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF00D084),
-                    foregroundColor: Colors.white,
+                    foregroundColor: Colors.black,
                     elevation: 0,
                     padding: EdgeInsets.zero,
                     minimumSize: Size.zero,
@@ -734,6 +776,7 @@ class _CourseRegApprovalScreenState extends State<CourseRegApprovalScreen> {
                     ),
                   ),
                   child: const FittedBox(
+                    fit: BoxFit.scaleDown,
                     child: Text(
                       "notify",
                       maxLines: 1,
