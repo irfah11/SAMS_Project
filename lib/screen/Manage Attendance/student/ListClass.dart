@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../Controller/Manage Attendance/AttendanceController.dart';
+import '../../../widgets/periodic_rebuild.dart';
 import 'AttendanceCheckIn.dart';
 
 class StudentListClassScreen extends StatefulWidget {
@@ -22,13 +24,31 @@ class StudentListClassScreen extends StatefulWidget {
 }
 
 class _StudentListClassScreenState extends State<StudentListClassScreen> {
-  // sessionId → personal status: "Pending" | "Attend" | "Absent" | "Late"
+  // sessionId → personal status FROM A RECORD: "Attend" | "Absent" | "Late".
+  // A session with no entry here means the student has no AttendanceRecord yet.
   Map<String, String> _personalStatus = {};
+
+  // The student's display name, used when persisting an Absent record.
+  String? _studentName;
+
+  // Sessions we've already finalised as Absent (avoids repeat writes).
+  final Set<String> _absentEnsured = {};
 
   @override
   void initState() {
     super.initState();
+    _loadStudentName();
     _loadPersonalStatus();
+  }
+
+  Future<void> _loadStudentName() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .get();
+    _studentName = doc.data()?['name'] as String?;
   }
 
   Future<void> _loadPersonalStatus() async {
@@ -49,8 +69,37 @@ class _StudentListClassScreenState extends State<StudentListClassScreen> {
     if (mounted) setState(() => _personalStatus = map);
   }
 
-  String _getPersonalStatus(String sessionId) =>
-      _personalStatus[sessionId] ?? 'Pending';
+  /// The status to display for a session, given its (time-based) status:
+  ///   • a recorded result (Attend / Late / Absent) always wins;
+  ///   • otherwise a Passed class with no check-in is Absent;
+  ///   • otherwise it's still Pending (upcoming or open for check-in).
+  String _displayStatus(String sessionId, String sessionStatus) {
+    final recorded = _personalStatus[sessionId];
+    if (recorded != null) return recorded;
+    if (sessionStatus == 'Passed') return 'Absent';
+    return 'Pending';
+  }
+
+  /// Persist an Absent record in Firestore for any Passed session the student
+  /// missed (no check-in, no lecturer override). Idempotent and lecturer-safe
+  /// — see [AttendanceController.ensureAbsentRecord].
+  Future<void> _finaliseAbsentees(List<QueryDocumentSnapshot> docs) async {
+    if (widget.studentId == null) return;
+    var wrote = false;
+    for (final doc in docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      if (AttendanceController.effectiveStatus(data) != 'Passed') continue;
+      if (_personalStatus.containsKey(doc.id)) continue; // already has a record
+      if (!_absentEnsured.add(doc.id)) continue;         // already handled
+      await AttendanceController.ensureAbsentRecord(
+        sessionId:   doc.id,
+        studentId:   widget.studentId!,
+        studentName: _studentName ?? widget.studentId!,
+      );
+      wrote = true;
+    }
+    if (wrote) _loadPersonalStatus();
+  }
 
   String _fmtTs(Timestamp? ts) {
     if (ts == null) return '-';
@@ -119,7 +168,15 @@ class _StudentListClassScreenState extends State<StudentListClassScreen> {
                     if (ta == null || tb == null) return 0;
                     return ta.compareTo(tb);
                   });
-                return displayClassList(context, docs);
+                // Persist Absent for any class that has already passed without
+                // a check-in (after this frame, never during build).
+                WidgetsBinding.instance.addPostFrameCallback(
+                    (_) => _finaliseAbsentees(docs));
+                // Rebuild periodically so time-based status (and which rows
+                // are tappable) stays current while the screen is open.
+                return PeriodicRebuild(
+                  builder: (_) => displayClassList(context, docs),
+                );
               },
             ),
           ],
@@ -177,11 +234,11 @@ class _StudentListClassScreenState extends State<StudentListClassScreen> {
 
   TableRow _buildRow(
       BuildContext context, String docId, Map<String, dynamic> data) {
-    final sessionStatus = data['session_status'] as String? ?? 'Pending';
+    final sessionStatus = AttendanceController.effectiveStatus(data);
     final startTs = data['start_time'] as Timestamp?;
     final endTs   = data['end_time'] as Timestamp?;
     final desc    = data['session_description'] as String? ?? '-';
-    final personal = _getPersonalStatus(docId);
+    final personal = _displayStatus(docId, sessionStatus);
 
     // Only allow tap-to-check-in if session is Active and student hasn't checked in yet
     final canCheckIn = sessionStatus == 'Active' && personal == 'Pending';

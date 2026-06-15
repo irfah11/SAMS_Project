@@ -18,6 +18,38 @@ class AttendanceController {
   static const _recordsCol  = 'AttendanceRecord';
 
   // ================================================================
+  // SESSION STATUS (time-based)
+  // ================================================================
+
+  /// The effective status of a session, derived from the current time, the
+  /// session's end_time and whether the lecturer has opened check-in by
+  /// generating an attendance code:
+  ///
+  ///   • after `end_time`        → 'Passed'  (check-in closed, even if a code
+  ///                                exists — the class is over)
+  ///   • code generated, not yet
+  ///     past `end_time`         → 'Active'  (open for check-in immediately,
+  ///                                even before the scheduled start_time)
+  ///   • no code generated yet   → 'Pending'
+  ///
+  /// This is computed on read rather than stored, so a class becomes Active
+  /// the moment the lecturer generates the code and automatically becomes
+  /// Passed when its end time arrives — no manual update or background job
+  /// required.
+  static String effectiveStatus(Map<String, dynamic> data,
+      [DateTime? nowOverride]) {
+    final now   = nowOverride ?? DateTime.now();
+    final end   = (data['end_time'] as Timestamp?)?.toDate();
+    final hasCode =
+        ((data['attendance_code'] as String?) ?? '').trim().isNotEmpty;
+
+    // Once the class end time has passed, check-in is closed.
+    if (end != null && now.isAfter(end)) return 'Passed';
+    // Open as soon as the lecturer has generated a code.
+    return hasCode ? 'Active' : 'Pending';
+  }
+
+  // ================================================================
   // SHARED
   // ================================================================
 
@@ -228,41 +260,87 @@ class AttendanceController {
   // ================================================================
 
   /// Load the subjects and CoQ modules assigned to this lecturer.
-  /// [lecturerId] is the numeric ID (kept for API compatibility, currently unused).
+  /// [lecturerId] is the numeric ID used by seeded data where available.
   /// [lecturerName] is the display name used by both course_subjects.lecturer_name
-  /// and module_coq.lecturer_name (neither collection has a Lecturer_id field).
+  /// and module_coq.lecturer_name in manually-created records.
   /// Returns a list of maps with keys: id, name, isCoQ.
   static Future<List<Map<String, dynamic>>> fetchLecturerClasses(
       dynamic lecturerId, {String lecturerName = ''}) async {
     final list = <Map<String, dynamic>>[];
+    final seen = <String>{};
 
-    if (lecturerName.isNotEmpty) {
-      final subSnap = await _db
-          .collection('course_subjects')
-          .where('lecturer_name', isEqualTo: lecturerName)
-          .get();
-      for (final doc in subSnap.docs) {
+    void addClass(
+      QueryDocumentSnapshot<Map<String, dynamic>> doc, {
+      required bool isCoQ,
+    }) {
         final d = doc.data();
-        list.add({
-          'id':    d['subject_id'] ?? doc.id,
-          'name':  d['subject_name'] ?? 'Unknown Subject',
-          'isCoQ': false,
-        });
-      }
+      final id = (d[isCoQ ? 'coq_id' : 'subject_id'] ?? doc.id).toString();
+      final key = '${isCoQ ? 'coq' : 'subject'}:$id';
+      if (id.isEmpty || seen.contains(key)) return;
+      seen.add(key);
+      list.add({
+        'id': id,
+        'name': (d[isCoQ ? 'activity_name' : 'subject_name'] ??
+                (isCoQ ? 'Unknown Activity' : 'Unknown Subject'))
+            .toString(),
+        'isCoQ': isCoQ,
+      });
+    }
 
-      final coqSnap = await _db
-          .collection('module_coq')
-          .where('lecturer_name', isEqualTo: lecturerName)
+    Future<void> addMatches({
+      required String collection,
+      required String field,
+      required dynamic value,
+      required bool isCoQ,
+    }) async {
+      if (value == null || value.toString().trim().isEmpty) return;
+      final snap = await _db
+          .collection(collection)
+          .where(field, isEqualTo: value)
           .get();
-      for (final doc in coqSnap.docs) {
-        final d = doc.data();
-        list.add({
-          'id':    d['coq_id'] ?? doc.id,
-          'name':  d['activity_name'] ?? 'Unknown Activity',
-          'isCoQ': true,
-        });
+      for (final doc in snap.docs) {
+        addClass(doc, isCoQ: isCoQ);
       }
     }
+
+    if (lecturerName.isNotEmpty) {
+      await addMatches(
+        collection: 'course_subjects',
+        field: 'lecturer_name',
+        value: lecturerName,
+        isCoQ: false,
+      );
+      await addMatches(
+        collection: 'module_coq',
+        field: 'lecturer_name',
+        value: lecturerName,
+        isCoQ: true,
+      );
+    }
+
+    final lecturerIds = <dynamic>[];
+    if (lecturerId != null) {
+      lecturerIds.add(lecturerId);
+      final parsed = int.tryParse(lecturerId.toString());
+      if (parsed != null && parsed != lecturerId) {
+        lecturerIds.add(parsed);
+      }
+    }
+
+    for (final id in lecturerIds) {
+      await addMatches(
+        collection: 'course_subjects',
+        field: 'lecturer_id',
+        value: id,
+        isCoQ: false,
+      );
+      await addMatches(
+        collection: 'module_coq',
+        field: 'lecturer_id',
+        value: id,
+        isCoQ: true,
+      );
+      }
 
     return list;
   }
@@ -365,9 +443,7 @@ class AttendanceController {
         await _db.collection(_sessionsCol).doc(sessionId).get();
 
     if (sessionDoc.exists) {
-      final status =
-          sessionDoc.data()?['session_status'] as String? ?? '';
-      if (status == 'Passed') {
+      if (effectiveStatus(sessionDoc.data()!) == 'Passed') {
         throw const SessionPassedException();
       }
     }
@@ -481,6 +557,33 @@ class AttendanceController {
     return q.snapshots();
   }
 
+  /// Mark a student 'Absent' for a session **only if they have no record yet**.
+  /// Idempotent: if any AttendanceRecord already exists (Present / Late /
+  /// Absent — e.g. the student checked in, or the lecturer already set a
+  /// status), this does nothing, so it never overwrites a real result or a
+  /// lecturer's override. Intended to finalise no-shows once a class is Passed.
+  static Future<void> ensureAbsentRecord({
+    required String sessionId,
+    required String studentId,
+    required String studentName,
+  }) async {
+    final existing = await _db
+        .collection(_recordsCol)
+        .where('session_id', isEqualTo: sessionId)
+        .where('Student_id', isEqualTo: studentId)
+        .limit(1)
+        .get();
+    if (existing.docs.isNotEmpty) return;
+
+    await _db.collection(_recordsCol).add({
+      'session_id':    sessionId,
+      'Student_id':    studentId,
+      'student_name':  studentName,
+      'status':        'Absent',
+      'check_in_time': null,
+    });
+  }
+
   /// Submit a check-in for a student.
   /// Validates that the session is Active, the entered code is correct, and
   /// — unless the session is online or has no location set — that the
@@ -505,8 +608,13 @@ class AttendanceController {
 
     final data   = sessionDoc.data()!;
     final code   = (data['attendance_code'] as String? ?? '').toUpperCase();
-    final status = data['session_status'] as String? ?? '';
+    final status = effectiveStatus(data);
 
+    if (status == 'Passed') {
+      return const CheckInResult(
+          success: false,
+          message: 'This session has ended. Attendance is now closed.');
+    }
     if (status != 'Active') {
       return const CheckInResult(
           success: false,

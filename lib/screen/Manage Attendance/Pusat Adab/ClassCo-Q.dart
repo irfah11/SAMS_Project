@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../Controller/Manage Attendance/AttendanceController.dart';
+import '../../../widgets/periodic_rebuild.dart';
 import 'ListAttendance.dart';
 
 class PusatAdabClassCoQScreen extends StatelessWidget {
@@ -102,22 +103,26 @@ class PusatAdabClassCoQScreen extends StatelessWidget {
                     if (ta == null || tb == null) return 0;
                     return ta.compareTo(tb);
                   });
-                return Table(
-                  border: TableBorder.all(
-                      color: Colors.grey.shade400, width: 0.5),
-                  columnWidths: const {
-                    0: FlexColumnWidth(2.5),
-                    1: FlexColumnWidth(3),
-                    2: FlexColumnWidth(2),
-                    3: FlexColumnWidth(2),
-                  },
-                  children: [
-                    _hdr(),
-                    ...docs.map((doc) {
-                      final d = doc.data() as Map<String, dynamic>;
-                      return _row(context, doc.id, d);
-                    }),
-                  ],
+                // Rebuild periodically so the Class Status column reflects
+                // time-based transitions (e.g. Active → Passed) live.
+                return PeriodicRebuild(
+                  builder: (_) => Table(
+                    border: TableBorder.all(
+                        color: Colors.grey.shade400, width: 0.5),
+                    columnWidths: const {
+                      0: FlexColumnWidth(2.5),
+                      1: FlexColumnWidth(3),
+                      2: FlexColumnWidth(2),
+                      3: FlexColumnWidth(2),
+                    },
+                    children: [
+                      _hdr(),
+                      ...docs.map((doc) {
+                        final d = doc.data() as Map<String, dynamic>;
+                        return _row(context, doc.id, d);
+                      }),
+                    ],
+                  ),
                 );
               },
             ),
@@ -139,7 +144,7 @@ class PusatAdabClassCoQScreen extends StatelessWidget {
 
   TableRow _row(
       BuildContext context, String docId, Map<String, dynamic> data) {
-    final status = data['session_status'] as String? ?? 'Pending';
+    final status = AttendanceController.effectiveStatus(data);
     final startTs = data['start_time'] as Timestamp?;
     final endTs   = data['end_time'] as Timestamp?;
     final desc    = data['session_description'] as String? ?? '-';
