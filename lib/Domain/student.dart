@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 // =============================================================
 // MODEL — Student (Data Dictionary 3.3.2)
 // Maps to the 'student' collection in Firestore.
-// Document ID = student_id (e.g. "CB23076").
+
 // =============================================================
 class Student {
   final String studentId;   // PK — also the document ID

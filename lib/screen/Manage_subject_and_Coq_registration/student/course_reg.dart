@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:sams/Controller/Manage_Coq_and_Subject_Registration/RegistrationController.dart';
+import 'package:sams/Domain/registration_subject.dart';
+import 'package:sams/screen/Manage_Menu/student_menu.dart';
 
 class CourseRegScreen extends StatefulWidget {
   final String semester;
@@ -10,162 +14,185 @@ class CourseRegScreen extends StatefulWidget {
 }
 
 class _CourseRegScreenState extends State<CourseRegScreen> {
-  // Dropdown variables
-  String? selectedCourse;
-  String? selectedSection;
-  String? selectedLab;
+  final String currentStudentId = "CB23041";
+
+  String studentName = "Loading...";
+  String studentProgramme = "Loading...";
+  String studentAdvisor = "Loading...";
+
+  final RegistrationController _controller = RegistrationController();
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchStudentProfile();
+  }
+
+  void _fetchStudentProfile() async {
+    try {
+      var studentQuery = await FirebaseFirestore.instance
+          .collection('student')
+          .where('student_id', isEqualTo: currentStudentId)
+          .get();
+
+      if (studentQuery.docs.isNotEmpty && mounted) {
+        var data = studentQuery.docs.first.data();
+
+        setState(() {
+          studentName = data['full_name'] ?? 'No Name';
+          studentProgramme = data['programme'] ?? 'No Programme';
+          studentAdvisor = data['advisor_name'] ?? 'No Advisor';
+        });
+      } else {
+        setState(() {
+          studentName = "Pelajar Tidak Dijumpai";
+          studentProgramme = "Sila semak ID";
+          studentAdvisor = currentStudentId;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        studentName = "Ralat: $e";
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+      drawer: const StudentDrawer(),
+
       appBar: AppBar(
-        backgroundColor: const Color(0xFF64D2EC),
+        automaticallyImplyLeading: false,
+        backgroundColor: const Color(0xFF55D3E7),
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
+        toolbarHeight: 64,
+        titleSpacing: 27,
         title: const Text(
           'SAMS',
           style: TextStyle(
             color: Colors.black,
-            fontWeight: FontWeight.bold,
-            fontSize: 24,
+            fontWeight: FontWeight.w900,
+            fontSize: 26,
+            letterSpacing: 2,
           ),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.menu, color: Colors.black, size: 28),
-            onPressed: () {},
+          Builder(
+            builder: (context) {
+              return IconButton(
+                icon: const Icon(Icons.menu, color: Colors.black, size: 32),
+                onPressed: () {
+                  Scaffold.of(context).openDrawer();
+                },
+              );
+            },
           ),
+          const SizedBox(width: 4),
         ],
       ),
+
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20.0),
+        padding: const EdgeInsets.fromLTRB(18, 10, 10, 24),
         child: Column(
           children: [
-            // 1. Student Profile Section
             Container(
-              padding: const EdgeInsets.all(15),
+              margin: const EdgeInsets.only(left: 8, right: 2),
+              padding: const EdgeInsets.fromLTRB(18, 13, 18, 14),
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFD8D8D8)),
+                borderRadius: BorderRadius.circular(6),
               ),
               child: Column(
                 children: [
-                  _buildDisabledField("Name", "Value"),
-                  _buildDisabledField("Programme", "Value"),
-                  _buildDisabledField("Advisor", "Value"),
+                  _buildDisabledField("Name", studentName),
+                  _buildDisabledField("Programme", studentProgramme),
+                  _buildDisabledField("Advisor", studentAdvisor),
                   _buildDisabledField("Semester", widget.semester),
                 ],
               ),
             ),
-            const SizedBox(height: 20),
 
-            // 2. Selection UI (This was missing in your emulator!)
-            _buildDropdown(
-              "Course",
-              selectedCourse,
-              (val) => setState(() => selectedCourse = val),
-            ),
-            _buildDropdown(
-              "Section",
-              selectedSection,
-              (val) => setState(() => selectedSection = val),
-            ),
-            _buildDropdown(
-              "Tutorial/Lab",
-              selectedLab,
-              (val) => setState(() => selectedLab = val),
-            ),
+            const SizedBox(height: 17),
 
-            const SizedBox(height: 15),
+            _buildDisplayRow("Course"),
+            _buildDisplayRow("Section"),
+            _buildDisplayRow("Tutorial/Lab"),
 
-            // 3. Add Button
-            ElevatedButton(
-              onPressed: () {
-                // Logic to add more to the list can go here
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF64D2EC),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 30),
-              ),
-              child: const Text("Add", style: TextStyle(color: Colors.black)),
-            ),
-            const SizedBox(height: 25),
+            const SizedBox(height: 45),
 
-            // 4. Labels above Table
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                _buildHeaderLabel("Course Registration\nfor approval", 115),
-                _buildHeaderLabel("Course\nRegistration", 85),
+                _buildHeaderLabel(
+                  "Course Registration\nfor approval",
+                  120,
+                  onTap: () {
+                    Navigator.pop(context);
+                  },
+                ),
+                _buildHeaderLabel("Course\nRegistration", 78),
               ],
             ),
 
-            // 5. Registration Table (Populated as per Figma)
-            Table(
-              border: TableBorder.all(color: Colors.grey.shade400),
-              columnWidths: const {
-                0: IntrinsicColumnWidth(),
-                1: FlexColumnWidth(4),
-                2: FlexColumnWidth(1.5),
-                3: FlexColumnWidth(1),
-                4: FlexColumnWidth(2),
+            StreamBuilder<List<RegistrationSubject>>(
+              stream: _controller.getApprovedRegistrations(currentStudentId),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Padding(
+                    padding: EdgeInsets.all(18.0),
+                    child: CircularProgressIndicator(),
+                  );
+                }
+
+                final approvedList = snapshot.data ?? [];
+
+                return Column(
+                  children: [
+                    _buildRegistrationTable(approvedList),
+                    if (approvedList.isNotEmpty)
+                      _buildBottomTotal(approvedList),
+                  ],
+                );
               },
-              children: [
-                _buildTableHeader(),
-                _buildTableRow(
-                  "1",
-                  "BCS3133 Software\nEngineering Practices",
-                  "01\n01B",
-                  "3",
-                ),
-                _buildTableRow(
-                  "2",
-                  "BCS3153 Software Evolution\nMaintenance",
-                  "02\n02B",
-                  "3",
-                ),
-              ],
             ),
-
-            // 6. Total and Notify (Total is fixed to align with Credit Hour column)
-            _buildBottomControls(),
           ],
         ),
       ),
     );
   }
 
-  // --- UI Helper Methods ---
-
   Widget _buildDisabledField(String label, String value) {
+    final bool showPlaceholder =
+        value.trim().isEmpty || value.toLowerCase().contains("loading");
+
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
           SizedBox(
-            width: 85,
-            child: Text(label, style: const TextStyle(fontSize: 13)),
+            width: 72,
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 13, color: Colors.black87),
+            ),
           ),
           Expanded(
             child: Container(
-              height: 35,
-              padding: const EdgeInsets.symmetric(horizontal: 10),
+              height: 22,
+              padding: const EdgeInsets.symmetric(horizontal: 11),
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: const Color(0xFFDADADA), width: 0.8),
+                borderRadius: BorderRadius.circular(6),
               ),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  value,
-                  style: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+              alignment: Alignment.centerLeft,
+              child: Text(
+                showPlaceholder ? "Value" : value,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: showPlaceholder ? Colors.grey : Colors.black87,
                 ),
               ),
             ),
@@ -175,40 +202,39 @@ class _CourseRegScreenState extends State<CourseRegScreen> {
     );
   }
 
-  Widget _buildDropdown(
-    String label,
-    String? value,
-    ValueChanged<String?> onChanged,
-  ) {
+  Widget _buildDisplayRow(String label) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5.0),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
           SizedBox(
-            width: 85,
-            child: Text(label, style: const TextStyle(fontSize: 13)),
+            width: 84,
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 13, color: Colors.black87),
+            ),
           ),
           Expanded(
             child: Container(
-              height: 42,
-              padding: const EdgeInsets.symmetric(horizontal: 10),
+              height: 38,
+              padding: const EdgeInsets.only(left: 11, right: 5),
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFDADADA), width: 0.9),
+                borderRadius: BorderRadius.circular(6),
               ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: value,
-                  isExpanded: true,
-                  hint: const Text(
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
                     "Value",
-                    style: TextStyle(fontSize: 13, color: Colors.grey),
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
                   ),
-                  items: ["Data 1", "Data 2"]
-                      .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                      .toList(),
-                  onChanged: onChanged,
-                ),
+                  Icon(
+                    Icons.keyboard_arrow_down,
+                    color: Colors.black,
+                    size: 28,
+                  ),
+                ],
               ),
             ),
           ),
@@ -217,122 +243,189 @@ class _CourseRegScreenState extends State<CourseRegScreen> {
     );
   }
 
-  Widget _buildHeaderLabel(String text, double width) {
-    return Container(
-      width: width,
-      height: 45,
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade400),
-        color: const Color(0xFFF0F4FF),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        text,
-        textAlign: TextAlign.center,
-        style: const TextStyle(
-          fontSize: 10,
-          color: Colors.blue,
-          fontWeight: FontWeight.w500,
+  Widget _buildHeaderLabel(String text, double width, {VoidCallback? onTap}) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        width: width,
+        height: 32,
+        decoration: BoxDecoration(
+          border: Border.all(color: const Color(0xFFBDBDBD), width: 0.8),
+          color: Colors.white,
         ),
+        alignment: Alignment.center,
+        child: Text(
+          text,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontSize: 11,
+            color: Colors.blue,
+            height: 1.05,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRegistrationTable(List<RegistrationSubject> approvedList) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 5),
+      child: Table(
+        border: TableBorder.all(color: const Color(0xFFBDBDBD), width: 0.8),
+        columnWidths: const {
+          0: FixedColumnWidth(28),
+          1: FlexColumnWidth(),
+          2: FixedColumnWidth(48),
+          3: FixedColumnWidth(42),
+          4: FixedColumnWidth(70),
+        },
+        defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+        children: [
+          _buildTableHeader(),
+          if (approvedList.isEmpty)
+            _buildEmptyRow()
+          else
+            ...List.generate(approvedList.length, (index) {
+              final sub = approvedList[index];
+
+              return _buildTableRow(
+                no: (index + 1).toString(),
+                subject: '${sub.subjectId}\n${sub.subjectName}',
+                section: '${sub.section}\n${sub.tutorialLab}',
+                credit: sub.creditHour.toString(),
+                regId: sub.regId,
+              );
+            }),
+        ],
       ),
     );
   }
 
   TableRow _buildTableHeader() {
-    return const TableRow(
+    return TableRow(
       children: [
-        Padding(
-          padding: EdgeInsets.all(8),
-          child: Text(
-            "no",
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 11),
-          ),
-        ),
-        Padding(
-          padding: EdgeInsets.all(8),
-          child: Text(
-            "Subject Code & Subject Name",
-            style: TextStyle(fontSize: 11),
-          ),
-        ),
-        Padding(
-          padding: EdgeInsets.all(8),
-          child: Text(
-            "Section & Lab",
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 11),
-          ),
-        ),
-        Padding(
-          padding: EdgeInsets.all(8),
-          child: Text(
-            "Credit Hour",
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 11),
-          ),
-        ),
-        Padding(
-          padding: EdgeInsets.all(8),
-          child: Text(
-            "Action",
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 11),
-          ),
-        ),
+        _tableHeaderCell("no", center: true),
+        _tableHeaderCell("Subject Code &\nSubject Name"),
+        _tableHeaderCell("Section\n& Lab", center: true),
+        _tableHeaderCell("Credit\nHour", center: true),
+        _tableHeaderCell("Action", center: true),
       ],
     );
   }
 
-  TableRow _buildTableRow(
-    String no,
-    String subject,
-    String section,
-    String credit,
-  ) {
+  Widget _tableHeaderCell(String text, {bool center = false}) {
+    return SizedBox(
+      height: 38,
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Align(
+          alignment: center ? Alignment.center : Alignment.centerLeft,
+          child: Text(
+            text,
+            textAlign: center ? TextAlign.center : TextAlign.left,
+            softWrap: true,
+            style: const TextStyle(
+              fontSize: 10,
+              color: Colors.black,
+              height: 1.1,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  TableRow _buildEmptyRow() {
+    return const TableRow(
+      children: [
+        SizedBox(height: 60),
+        Padding(
+          padding: EdgeInsets.all(6),
+          child: Text(
+            "No approved subject yet.",
+            style: TextStyle(fontSize: 11, color: Colors.grey),
+          ),
+        ),
+        SizedBox(),
+        SizedBox(),
+        SizedBox(),
+      ],
+    );
+  }
+
+  TableRow _buildTableRow({
+    required String no,
+    required String subject,
+    required String section,
+    required String credit,
+    required String regId,
+  }) {
     return TableRow(
       children: [
-        TableCell(
-          verticalAlignment: TableCellVerticalAlignment.middle,
-          child: Text(no, textAlign: TextAlign.center),
+        SizedBox(
+          height: 65,
+          child: Center(child: Text(no, style: const TextStyle(fontSize: 12))),
         ),
-        TableCell(
-          verticalAlignment: TableCellVerticalAlignment.middle,
-          child: Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Text(subject, style: const TextStyle(fontSize: 11)),
-          ),
-        ),
-        TableCell(
-          verticalAlignment: TableCellVerticalAlignment.middle,
+
+        Padding(
+          padding: const EdgeInsets.all(5),
           child: Text(
-            section,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 11),
+            subject,
+            style: const TextStyle(fontSize: 11, height: 1.05),
           ),
         ),
-        TableCell(
-          verticalAlignment: TableCellVerticalAlignment.middle,
-          child: Text(credit, textAlign: TextAlign.center),
+
+        Text(
+          section,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 11, height: 1.1),
         ),
-        TableCell(
-          verticalAlignment: TableCellVerticalAlignment.middle,
-          child: Padding(
-            padding: const EdgeInsets.all(6.0),
-            child: Container(
-              height: 30,
+
+        Text(
+          credit,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 12),
+        ),
+
+        Padding(
+          padding: const EdgeInsets.all(4),
+          child: Center(
+            child: SizedBox(
+              width: 52,
+              height: 29,
               child: ElevatedButton(
-                onPressed: () {},
+                onPressed: () async {
+                  await _controller.dropRegisteredCourse(regId);
+
+                  if (!mounted) return;
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Subject dropped successfully."),
+                    ),
+                  );
+                },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.grey[200],
+                  backgroundColor: const Color(0xFFE9E9E9),
                   foregroundColor: Colors.black,
                   elevation: 0,
-                  side: BorderSide(color: Colors.grey.shade400),
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  side: const BorderSide(color: Color(0xFFB7B7B7), width: 0.8),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: BorderRadius.circular(5),
                   ),
                 ),
-                child: const Text("Drop", style: TextStyle(fontSize: 10)),
+                child: const FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    "Drop",
+                    maxLines: 1,
+                    style: TextStyle(fontSize: 10),
+                  ),
+                ),
               ),
             ),
           ),
@@ -341,49 +434,28 @@ class _CourseRegScreenState extends State<CourseRegScreen> {
     );
   }
 
-  Widget _buildBottomControls() {
+  Widget _buildBottomTotal(List<RegistrationSubject> list) {
+    int totalCredits = list.fold(0, (sum, item) => sum + item.creditHour);
+
     return Table(
-      border: TableBorder.all(color: Colors.grey.shade400),
+      border: TableBorder.all(color: const Color(0xFFBDBDBD), width: 0.8),
       columnWidths: const {
-        0: FlexColumnWidth(6.6),
-        1: FlexColumnWidth(1),
-        2: FlexColumnWidth(2),
+        0: FlexColumnWidth(),
+        1: FixedColumnWidth(45),
+        2: FixedColumnWidth(70),
       },
+      defaultVerticalAlignment: TableCellVerticalAlignment.middle,
       children: [
         TableRow(
           children: [
+            const SizedBox(height: 48),
+            Center(
+              child: Text(
+                totalCredits.toString(),
+                style: const TextStyle(fontSize: 12),
+              ),
+            ),
             const SizedBox(),
-            const TableCell(
-              verticalAlignment: TableCellVerticalAlignment.middle,
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 12.0),
-                child: Text(
-                  "6",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(6.0),
-              child: Container(
-                height: 38,
-                child: ElevatedButton(
-                  onPressed: () {},
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00D084),
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
-                  child: const Text(
-                    "notify",
-                    style: TextStyle(color: Colors.white, fontSize: 11),
-                  ),
-                ),
-              ),
-            ),
           ],
         ),
       ],
