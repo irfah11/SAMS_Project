@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import '../Manage_subject_and_Coq_registration/student/coq_list.dart';
-import '../Manage_subject_and_Coq_registration/student/reg_dashboard.dart';
-// 1. IMPORT the booking screen here
-import '../Manage_subject_and_Coq_registration/student/booked_coq.dart';
-import '../Fee/Student/FeePage.dart';
+import 'package:sams/screen/Manage_subject_and_Coq_registration/student/coq_list.dart';
+import 'package:sams/screen/Manage_subject_and_Coq_registration/student/reg_dashboard.dart';
+import 'package:sams/screen/Manage_subject_and_Coq_registration/student/booked_coq.dart';
+import 'package:sams/screen/Fee/Student/FeePage.dart';
 import 'package:sams/auth/auth_service.dart';
 import 'package:sams/auth/login_screen.dart';
 
@@ -52,8 +51,7 @@ class StudentDrawer extends StatelessWidget {
                       // Return to the dashboard (the first route after login),
                       // popping any pages opened on top of it. If already on
                       // the dashboard this is a no-op.
-                      Navigator.of(context)
-                          .popUntil((route) => route.isFirst);
+                      Navigator.of(context).popUntil((route) => route.isFirst);
                     },
                   ),
                   const Divider(
