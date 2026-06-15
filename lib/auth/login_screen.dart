@@ -155,7 +155,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
               // --- DROPDOWN ROLE ---
               DropdownButtonFormField<String>(
-                value: _selectedRole,
+                initialValue: _selectedRole,
                 decoration: const InputDecoration(
                   labelText: "Login As",
                   border: OutlineInputBorder(),
