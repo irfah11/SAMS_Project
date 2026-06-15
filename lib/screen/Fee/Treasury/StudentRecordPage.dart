@@ -12,7 +12,9 @@ enum _ActionBanner { none, blocked, restored }
 
 // =============================================================
 // BOUNDARY CLASS — StudentRecordPage  [SDD-REQ-306]
-// Methods: loadStudentRecord(), generatePDFReport(), toggleAcademicAccess()
+// SDD methods: loadStudentRecord(), generatePDFReport().
+// toggleAcademicAccess() (SDD-REQ-307 / SRS-REQ-309) is reused here at the
+// bottom so Treasury can block/unblock a student from their record too.
 // =============================================================
 class StudentRecordPage extends StatefulWidget {
   final String studentId;
@@ -73,7 +75,41 @@ class _StudentRecordPageState extends State<StudentRecordPage> {
     }
   }
 
-  // toggleAcademicAccess() — block/unblock this student, then notify them.
+  // "Report Generated Successfully" confirmation.
+  void _showReportGeneratedDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(Icons.check_circle_outline,
+                  size: 56, color: Color(0xFF52DE76)),
+              SizedBox(height: 16),
+              Text(
+                'Report Generated\nSuccessfully',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // toggleAcademicAccess() — SDD-REQ-307 / SRS-REQ-309: block/unblock this
+  // student via FeeController, then notify them. Kept here (at the bottom) so
+  // Treasury can act on any student from their record, not only overdue ones.
   Future<void> toggleAcademicAccess() async {
     if (_record == null || _busy) return;
     setState(() => _busy = true);
@@ -111,38 +147,6 @@ class _StudentRecordPageState extends State<StudentRecordPage> {
           : _ActionBanner.restored;
       _busy = false;
     });
-  }
-
-  // "Report Generated Successfully" confirmation.
-  void _showReportGeneratedDialog() {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: const [
-              Icon(Icons.check_circle_outline,
-                  size: 56, color: Color(0xFF52DE76)),
-              SizedBox(height: 16),
-              Text(
-                'Report Generated\nSuccessfully',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   @override
