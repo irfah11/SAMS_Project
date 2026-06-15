@@ -18,12 +18,6 @@ class _ApprovalRegState extends State<ApprovalReg> {
     return value.toString();
   }
 
-  // ignore: unused_element
-  String _shortText(String text, int maxLength) {
-    if (text.length <= maxLength) return text;
-    return '${text.substring(0, maxLength)}...';
-  }
-
   Future<void> _approveSubject(String regId) async {
     try {
       await _controller.approveRegistration(regId);
@@ -85,10 +79,10 @@ class _ApprovalRegState extends State<ApprovalReg> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header like Figma
+            // Header title with custom outline book icon
             Row(
               children: const [
-                Icon(Icons.menu_book_outlined, size: 72, color: Colors.black87),
+                OpenBookIcon(size: 76),
                 SizedBox(width: 18),
                 Expanded(
                   child: Text(
@@ -126,7 +120,6 @@ class _ApprovalRegState extends State<ApprovalReg> {
                 }
 
                 final allRegistrations = snapshot.data!.docs;
-
                 final Map<String, QueryDocumentSnapshot> uniqueMap = {};
 
                 for (final doc in allRegistrations) {
@@ -157,7 +150,6 @@ class _ApprovalRegState extends State<ApprovalReg> {
                         .toString()
                         .toLowerCase();
 
-                    // If one duplicate is Approved, show the Approved one
                     if (oldStatus != 'approved' && newStatus == 'approved') {
                       uniqueMap[key] = doc;
                     }
@@ -181,7 +173,6 @@ class _ApprovalRegState extends State<ApprovalReg> {
                   defaultVerticalAlignment: TableCellVerticalAlignment.middle,
                   children: [
                     _buildTableHeader(),
-
                     ...List.generate(registrations.length, (index) {
                       final doc = registrations[index];
                       final data = doc.data() as Map<String, dynamic>;
@@ -256,7 +247,6 @@ class _ApprovalRegState extends State<ApprovalReg> {
         _bodyCell(studentId, height: 105),
         _bodyCell(name, height: 105, alignLeft: true),
         _bodyCell(subject, height: 105, alignLeft: true),
-
         SizedBox(
           height: 105,
           child: Center(
@@ -325,4 +315,63 @@ class _ApprovalRegState extends State<ApprovalReg> {
       ),
     );
   }
+}
+
+// Custom book icon to match Figma style
+class OpenBookIcon extends StatelessWidget {
+  final double size;
+
+  const OpenBookIcon({super.key, this.size = 60});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(painter: _OpenBookPainter()),
+    );
+  }
+}
+
+class _OpenBookPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black
+      ..strokeWidth = 3.1
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final w = size.width;
+    final h = size.height;
+
+    final leftPage = Path()
+      ..moveTo(w * 0.08, h * 0.22)
+      ..lineTo(w * 0.40, h * 0.22)
+      ..quadraticBezierTo(w * 0.50, h * 0.22, w * 0.50, h * 0.34)
+      ..lineTo(w * 0.50, h * 0.78)
+      ..quadraticBezierTo(w * 0.35, h * 0.66, w * 0.08, h * 0.72)
+      ..close();
+
+    final rightPage = Path()
+      ..moveTo(w * 0.92, h * 0.22)
+      ..lineTo(w * 0.60, h * 0.22)
+      ..quadraticBezierTo(w * 0.50, h * 0.22, w * 0.50, h * 0.34)
+      ..lineTo(w * 0.50, h * 0.78)
+      ..quadraticBezierTo(w * 0.65, h * 0.66, w * 0.92, h * 0.72)
+      ..close();
+
+    canvas.drawPath(leftPage, paint);
+    canvas.drawPath(rightPage, paint);
+
+    canvas.drawLine(
+      Offset(w * 0.50, h * 0.32),
+      Offset(w * 0.50, h * 0.80),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

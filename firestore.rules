@@ -1,0 +1,16 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // The original Firebase test-mode rules expired (allow read, write:
+    // if request.time < timestamp.date(2026, 6, 10)), which started denying
+    // ALL client requests on 2026-06-10. This replaces the time bomb with a
+    // simple "must be signed in" check, preserving the previous wide-open
+    // access pattern that the rest of the app (registration, payment, etc.)
+    // already relies on, without an expiry date.
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
