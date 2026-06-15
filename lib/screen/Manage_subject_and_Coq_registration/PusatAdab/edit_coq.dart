@@ -22,7 +22,6 @@ class _EditCoQState extends State<EditCoQ> {
 
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
-  String? _selectedLecturerName;
 
   final RegistrationController _controller = RegistrationController();
 
@@ -262,10 +261,10 @@ class _EditCoQState extends State<EditCoQ> {
               children: [
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const OpenRibbonIcon(size: 64),
-                    const SizedBox(width: 10),
-                    const Text(
+                  children: const [
+                    OpenRibbonIcon(size: 64),
+                    SizedBox(width: 10),
+                    Text(
                       'Edit Register\nCo-Q',
                       style: TextStyle(
                         fontSize: 21,
@@ -275,39 +274,6 @@ class _EditCoQState extends State<EditCoQ> {
                         color: Colors.black,
                       ),
                     ),
-                    const SizedBox(height: 5),
-                    StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance
-                          .collection('lecturer')
-                          .snapshots(),
-                      builder: (context, snapshot) {
-                        if (!snapshot.hasData) {
-                          return const LinearProgressIndicator();
-                        }
-                        return DropdownButtonFormField<String>(
-                          decoration: InputDecoration(
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 15,
-                            ),
-                          ),
-                          initialValue: _selectedLecturerName,
-                          items: snapshot.data!.docs.map((doc) {
-                            var data = doc.data() as Map<String, dynamic>;
-                            String name = data['full_name'] ?? 'No Name';
-                            return DropdownMenuItem(
-                              value: name,
-                              child: const Text(name),
-                            );
-                          }).toList(),
-                          onChanged: (value) =>
-                              setState(() => _selectedLecturerName = value),
-                        );
-                      },
-                    ),
-
                   ],
                 ),
 
