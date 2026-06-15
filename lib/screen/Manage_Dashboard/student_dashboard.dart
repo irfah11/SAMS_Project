@@ -85,19 +85,22 @@ class StudentDashboard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   // Load the logged-in student's real name from Firestore.
-                  // The student doc is keyed by studentId (e.g. student/CB23076).
+                  // Looked up by the student_id field, since not all student
+                  // docs are keyed by studentId as their document ID.
                   Flexible(
-                    child: FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                    child: FutureBuilder<QuerySnapshot<Map<String, dynamic>>>(
                       future: studentId.isEmpty
                           ? null
                           : FirebaseFirestore.instance
                               .collection('student')
-                              .doc(studentId)
+                              .where('student_id', isEqualTo: studentId)
+                              .limit(1)
                               .get(),
                       builder: (context, snapshot) {
                         String name = 'Student';
-                        if (snapshot.hasData && snapshot.data!.exists) {
-                          name = (snapshot.data!.data()?['full_name'] ?? 'Student')
+                        if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+                          name = (snapshot.data!.docs.first.data()['full_name'] ??
+                                  'Student')
                               .toString();
                         }
                         return Text(

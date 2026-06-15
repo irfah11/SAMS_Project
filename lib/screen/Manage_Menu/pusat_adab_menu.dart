@@ -3,6 +3,7 @@ import 'package:sams/auth/auth_service.dart';
 import 'package:sams/auth/login_screen.dart';
 import 'package:sams/screen/Manage_subject_and_Coq_registration/PusatAdab/create_module_coq.dart';
 import 'package:sams/screen/Manage_subject_and_Coq_registration/PusatAdab/list_coq.dart';
+import '../Manage Attendance/Pusat Adab/Co-QList.dart';
 
 class PusatAdabMenu extends StatelessWidget {
   const PusatAdabMenu({super.key});
@@ -85,7 +86,14 @@ class PusatAdabMenu extends StatelessWidget {
                   ),
                   children: [
                     _buildSubMenuItem('View Attendance', () {
-                      // Implementation for viewing attendance
+                      Navigator.pop(context); // Tutup drawer dahulu
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              const PusatAdabCoQListScreen(),
+                        ),
+                      );
                     }),
                   ],
                 ),

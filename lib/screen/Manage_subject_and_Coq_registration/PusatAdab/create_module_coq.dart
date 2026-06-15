@@ -119,8 +119,9 @@ class _CreateModuleCoQState extends State<CreateModuleCoQ> {
                           .collection('lecturer')
                           .snapshots(),
                       builder: (context, snapshot) {
-                        if (!snapshot.hasData)
+                        if (!snapshot.hasData) {
                           return const LinearProgressIndicator();
+                        }
                         List<DropdownMenuItem<String>> lecturerItems = snapshot
                             .data!
                             .docs
@@ -144,7 +145,7 @@ class _CreateModuleCoQState extends State<CreateModuleCoQ> {
                             ),
                           ),
                           hint: const Text("Select Advisor"),
-                          value: _selectedLecturerName,
+                          initialValue: _selectedLecturerName,
                           items: lecturerItems,
                           onChanged: (value) =>
                               setState(() => _selectedLecturerName = value),

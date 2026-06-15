@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../../widgets/card_image.dart';
 import 'ListClass.dart';
 
 class LecturerCoQSubjectScreen extends StatefulWidget {
@@ -50,23 +51,24 @@ class _LecturerCoQSubjectScreenState
 
     final list = <Map<String, dynamic>>[];
 
-    // Academic subjects from course_subjects where Lecturer_id == numeric id
-    final subSnap = await FirebaseFirestore.instance
-        .collection('course_subjects')
-        .where('Lecturer_id', isEqualTo: _lecturerId)
-        .get();
-
-    for (final doc in subSnap.docs) {
-      final d = doc.data();
-      list.add({
-        'id':    d['subject_id'] ?? doc.id,
-        'name':  d['subject_name'] ?? 'Unknown Subject',
-        'isCoQ': false,
-      });
-    }
-
-    // Co-Q modules from module_coq where lecturer_name matches
+    // Academic subjects from course_subjects where lecturer_name matches
+    // (course_subjects has no Lecturer_id field, same as module_coq)
     if (lecturerName.isNotEmpty) {
+      final subSnap = await FirebaseFirestore.instance
+          .collection('course_subjects')
+          .where('lecturer_name', isEqualTo: lecturerName)
+          .get();
+
+      for (final doc in subSnap.docs) {
+        final d = doc.data();
+        list.add({
+          'id':    d['subject_id'] ?? doc.id,
+          'name':  d['subject_name'] ?? 'Unknown Subject',
+          'isCoQ': false,
+        });
+      }
+
+      // Co-Q modules from module_coq where lecturer_name matches
       final coqSnap = await FirebaseFirestore.instance
           .collection('module_coq')
           .where('lecturer_name', isEqualTo: lecturerName)
@@ -115,53 +117,56 @@ class _LecturerCoQSubjectScreenState
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(children: const [
-                    Icon(Icons.people_outline, size: 48),
-                    SizedBox(width: 12),
-                    Text('Manage Attendance',
+                    Icon(Icons.people_outline, size: 32),
+                    SizedBox(width: 10),
+                    Text('Manage  Attendance',
                         style: TextStyle(
-                            fontSize: 22, fontWeight: FontWeight.w500)),
+                            fontSize: 20, fontWeight: FontWeight.w500)),
                   ]),
-                  const SizedBox(height: 6),
-                  const Text(
-                      'Select a subject or Co-Q module to manage attendance',
-                      style: TextStyle(fontSize: 13, color: Colors.black54)),
                   const SizedBox(height: 24),
                   if (_lecturerId == null)
                     _buildNoIdState()
                   else if (_classes.isEmpty)
                     _buildEmpty()
                   else
-                    ..._classes.map(_buildCard),
+                    ..._classes.map(displayclass),
                 ],
               ),
             ),
     );
   }
 
-  Widget _buildCard(Map<String, dynamic> cls) {
+  /// SDD selectclass() — open the session list for the chosen subject/module.
+  void selectclass(Map<String, dynamic> cls) {
     final isCoQ = cls['isCoQ'] as bool;
-    return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => LecturerListClassScreen(
-            subjectId:   isCoQ ? null : cls['id'] as String,
-            coqId:       isCoQ ? cls['id'] as String : null,
-            subjectName: cls['name'] as String,
-            isCoQ:       isCoQ,
-            lecturerId:  _lecturerId,
-          ),
+    final code  = (cls['id'] as String?) ?? '';
+    final name  = (cls['name'] as String?) ?? '';
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LecturerListClassScreen(
+          subjectId:   isCoQ ? null : cls['id'] as String,
+          coqId:       isCoQ ? cls['id'] as String : null,
+          subjectName: code.isEmpty ? name : '$code : $name',
+          isCoQ:       isCoQ,
+          lecturerId:  _lecturerId,
         ),
       ),
+    );
+  }
+
+  /// SDD displayclass() — build a tappable card for one subject/module.
+  Widget displayclass(Map<String, dynamic> cls) {
+    final code  = (cls['id'] as String?) ?? '';
+    final name  = (cls['name'] as String?) ?? '';
+    return GestureDetector(
+      onTap: () => selectclass(cls),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 14),
-        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.only(bottom: 20),
         decoration: BoxDecoration(
-          color: isCoQ
-              ? const Color(0xFFE3E8FF)
-              : const Color(0xFF4C66EE).withAlpha(30),
+          color: Colors.white,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: _blue.withAlpha(80)),
+          border: Border.all(color: Colors.grey.shade300),
           boxShadow: [
             BoxShadow(
                 color: Colors.black.withAlpha(15),
@@ -169,33 +174,29 @@ class _LecturerCoQSubjectScreenState
                 offset: const Offset(0, 3))
           ],
         ),
-        child: Row(children: [
-          Icon(
-              isCoQ ? Icons.military_tech_outlined : Icons.book_outlined,
-              size: 36,
-              color: _blue),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(cls['name'] as String,
-                    style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87)),
-                const SizedBox(height: 4),
-                Text(
-                    isCoQ
-                        ? 'Co-Curriculum Activity'
-                        : 'Academic Subject',
-                    style: const TextStyle(
-                        fontSize: 12, color: Colors.black54)),
-              ],
+        child: Column(
+          children: [
+            const CardImageBanner(),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              child: Column(
+                children: [
+                  Text(code,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87)),
+                  const SizedBox(height: 4),
+                  Text(name.toUpperCase(),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          fontSize: 13, color: Colors.black54)),
+                ],
+              ),
             ),
-          ),
-          const Icon(Icons.chevron_right, color: Colors.black54),
-        ]),
+          ],
+        ),
       ),
     );
   }
