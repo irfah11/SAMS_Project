@@ -1,18 +1,54 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-// Make sure this path matches your file structure
 import '../Manage_Menu/lecture_menu.dart';
+import '../../auth/auth_service.dart';
+import '../../auth/login_screen.dart';
 
 class LecturerDashboard extends StatelessWidget {
   const LecturerDashboard({super.key});
+
+  void _logout(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await AuthService().logout();
+              if (context.mounted) {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  (route) => false,
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      // Linking the Drawer to the LecturerDrawer below
       drawer: const LecturerDrawer(),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF4C66EE), // Blue shade from your mockup
+        backgroundColor: const Color(0xFF4C66EE),
         elevation: 0,
         automaticallyImplyLeading: false,
         title: const Text(
@@ -25,12 +61,15 @@ class LecturerDashboard extends StatelessWidget {
           ),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.logout, color: Colors.black),
+            tooltip: 'Logout',
+            onPressed: () => _logout(context),
+          ),
           Builder(
             builder: (context) => IconButton(
               icon: const Icon(Icons.menu, color: Colors.black, size: 32),
-              onPressed: () {
-                Scaffold.of(context).openDrawer();
-              },
+              onPressed: () => Scaffold.of(context).openDrawer(),
             ),
           ),
         ],
@@ -42,19 +81,32 @@ class LecturerDashboard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 10),
-
-              // Profile Section (Lecturer Name)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Welcome Back,\nNURUL BALQIS',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                      height: 1.2,
-                      fontFamily: 'Serif',
+                  Flexible(
+                    child: FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                      future: FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(FirebaseAuth.instance.currentUser!.uid)
+                          .get(),
+                      builder: (context, snapshot) {
+                        String name = 'Lecturer';
+                        if (snapshot.hasData && snapshot.data!.exists) {
+                          name = (snapshot.data!.data()?['name'] ?? 'Lecturer')
+                              .toString();
+                        }
+                        return Text(
+                          'Welcome Back,\n${name.toUpperCase()}',
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black,
+                            height: 1.2,
+                            fontFamily: 'Serif',
+                          ),
+                        );
+                      },
                     ),
                   ),
                   ClipOval(
@@ -77,10 +129,7 @@ class LecturerDashboard extends StatelessWidget {
                   ),
                 ],
               ),
-
               const SizedBox(height: 25),
-
-              // Banners
               _buildResponsiveImage('assets/Mobility.jpg'),
               const SizedBox(height: 15),
               _buildResponsiveImage('assets/LarianAmal.jpg'),

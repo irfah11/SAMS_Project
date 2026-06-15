@@ -45,14 +45,17 @@ class ListCoQ extends StatelessWidget {
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance.collection('module_coq').snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.hasError)
+          if (snapshot.hasError) {
             return const Center(child: Text('Something went wrong'));
-          if (snapshot.connectionState == ConnectionState.waiting)
+          }
+          if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
-          if (snapshot.data!.docs.isEmpty)
+          }
+          if (snapshot.data!.docs.isEmpty) {
             return const Center(
               child: Text('No Co-Q activities registered yet.'),
             );
+          }
 
           return ListView.builder(
             padding: const EdgeInsets.all(15),
