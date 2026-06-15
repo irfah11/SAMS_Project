@@ -167,6 +167,36 @@ class ListCoQ extends StatelessWidget {
 
     final String dateText = _formatDate(rawDate);
     final String timeText = _formatTime(rawTime);
+            icon: const Icon(Icons.add, color: Colors.white),
+            label: const Text("Add", style: TextStyle(color: Colors.white)),
+            style: TextButton.styleFrom(
+              backgroundColor: const Color(0xFF4A69FF).withOpacity(0.8),
+            ),
+          ),
+          const SizedBox(width: 10),
+        ],
+      ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance.collection('module_coq').snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return const Center(child: Text('Something went wrong'));
+          }
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.data!.docs.isEmpty) {
+            return const Center(
+              child: Text('No Co-Q activities registered yet.'),
+            );
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(15),
+            itemCount: snapshot.data!.docs.length,
+            itemBuilder: (context, index) {
+              var doc = snapshot.data!.docs[index];
+              var data = doc.data() as Map<String, dynamic>;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 32),

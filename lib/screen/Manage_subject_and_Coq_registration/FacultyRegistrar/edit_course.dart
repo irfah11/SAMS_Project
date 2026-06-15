@@ -199,8 +199,65 @@ class _EditCourseState extends State<EditCourse> {
               _buildInputField('Capacity', _capacityController, isNumber: true),
 
               _buildTimeField(),
-
               _buildLecturerDropdown(),
+
+              // Dropdown Lecturer
+              Padding(
+                padding: const EdgeInsets.only(bottom: 15.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Lecturer Name',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('lecturer')
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const LinearProgressIndicator();
+                        }
+
+                        List<DropdownMenuItem<String>> lecturerItems = [];
+                        for (var doc in snapshot.data!.docs) {
+                          var data = doc.data() as Map<String, dynamic>;
+                          String fullName = data['full_name'] ?? 'No Name';
+                          lecturerItems.add(
+                            DropdownMenuItem(
+                              value: fullName,
+                              child: Text(fullName),
+                            ),
+                          );
+                        }
+
+                        return DropdownButtonFormField<String>(
+                          decoration: InputDecoration(
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 15,
+                            ),
+                          ),
+                          initialValue: _selectedLecturerName,
+                          items: lecturerItems,
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedLecturerName = value;
+                            });
+                          },
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
 
               const SizedBox(height: 20),
 
