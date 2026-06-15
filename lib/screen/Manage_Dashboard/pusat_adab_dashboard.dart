@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import '../Manage Attendance/Pusat Adab/Co-QList.dart';
 import '../../auth/auth_service.dart';
 import '../../auth/login_screen.dart';
 
@@ -48,7 +47,7 @@ class PusatAdabDashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      drawer: _buildDrawer(context),
+      drawer: const PusatAdabMenu(),
       appBar: AppBar(
         backgroundColor: const Color(0xFF965E5E),
         elevation: 0,
@@ -140,111 +139,6 @@ class PusatAdabDashboard extends StatelessWidget {
               const SizedBox(height: 20),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDrawer(BuildContext context) {
-    return SizedBox(
-      width: 300,
-      child: Drawer(
-        backgroundColor: Colors.white,
-        elevation: 10,
-        child: Column(
-          children: [
-            Container(
-              height: 100,
-              width: double.infinity,
-              color: const Color(0xFF965E5E),
-              alignment: Alignment.bottomLeft,
-              padding: const EdgeInsets.only(left: 20, bottom: 15),
-              child: const Text(
-                'SAMS',
-                style: TextStyle(
-                  color: Colors.black,
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.2,
-                ),
-              ),
-            ),
-            Expanded(
-              child: ListView(
-                padding: EdgeInsets.zero,
-                children: [
-                  ListTile(
-                    leading: const Icon(Icons.home_outlined,
-                        color: Colors.black, size: 28),
-                    title: const Text('Home', style: TextStyle(fontSize: 16)),
-                    onTap: () => Navigator.pop(context),
-                  ),
-                  const Divider(
-                      height: 1,
-                      color: Color(0xFFCCCCCC),
-                      indent: 15,
-                      endIndent: 15),
-                  ListTile(
-                    leading: const Icon(Icons.military_tech_outlined,
-                        color: Colors.black, size: 28),
-                    title: const Text('Co-Q', style: TextStyle(fontSize: 16)),
-                    onTap: () => Navigator.pop(context),
-                  ),
-                  const Divider(
-                      height: 1,
-                      color: Color(0xFFCCCCCC),
-                      indent: 15,
-                      endIndent: 15),
-                  Theme(
-                    data: ThemeData().copyWith(dividerColor: Colors.transparent),
-                    child: ExpansionTile(
-                      leading: const Icon(Icons.people_outline,
-                          color: Colors.black, size: 28),
-                      title: const Text('Attendance',
-                          style: TextStyle(fontSize: 16)),
-                      trailing: const Icon(Icons.chevron_right,
-                          color: Colors.black),
-                      childrenPadding: const EdgeInsets.only(left: 45),
-                      children: [
-                        const Divider(height: 1, color: Color(0xFFE0E0E0)),
-                        ListTile(
-                          title: const Text('View Attendance',
-                              style: TextStyle(
-                                  color: Colors.black54, fontSize: 14)),
-                          onTap: () {
-                            Navigator.pop(context);
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (_) =>
-                                      const PusatAdabCoQListScreen()),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Divider(
-                      height: 1,
-                      color: Color(0xFFCCCCCC),
-                      indent: 15,
-                      endIndent: 15),
-                ],
-              ),
-            ),
-            // Logout at bottom of drawer
-            const Divider(height: 1, color: Color(0xFFCCCCCC)),
-            ListTile(
-              leading: const Icon(Icons.logout, color: Colors.red, size: 26),
-              title: const Text('Logout',
-                  style: TextStyle(color: Colors.red, fontSize: 15)),
-              onTap: () {
-                Navigator.pop(context);
-                _logout(context);
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
         ),
       ),
     );
