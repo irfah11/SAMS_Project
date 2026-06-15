@@ -1,7 +1,5 @@
-//Controller for faculty registrar Manage the subject(CRUD)
-
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:sams/Domain/module_coq.dart' show ModuleCoQ;
+// import from another package
+import 'package:cloud_firestore/cloud_firestore.dart'; // Firebase Firestore package
 import 'package:sams/Domain/registration_subject.dart';
 import '../../Domain/course_subject.dart';
 import '../../Domain/lecturer.dart';
@@ -9,16 +7,16 @@ import 'package:sams/Domain/module_coq.dart';
 import 'package:sams/Domain/coq_registration.dart';
 
 class RegistrationController {
-  // Instance untuk berhubung dengan Firebase Firestore
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  // 1. FIREBASE DATABASE CONNECTION
+  final FirebaseFirestore _db = FirebaseFirestore.instance; // Firestore object
 
-  // --- 1. FUNGSI CREATE (TAMBAH SUBJEK BARU) ---
+  // 2. CREATE COURSE SUBJECT
   Future<void> createCourse(CourseSubject subject) async {
     try {
       await _db
-          .collection('course_subjects') // Tukar di sini
-          .doc(subject.subjectId)
-          .set(subject.toFirebase());
+          .collection('course_subjects') // Access course_subjects collection
+          .doc(subject.subjectId) // Use subject ID as document ID
+          .set(subject.toFirebase()); //save course to firestore
 
       print("Course Subject ${subject.subjectName} berjaya didaftarkan!");
     } catch (e) {
@@ -27,35 +25,36 @@ class RegistrationController {
     }
   }
 
-  // Simpan pensyarah baru
   Future<void> createLecturer(Lecturer lecturer) async {
     try {
       await _db
-          .collection('lecturers')
-          .doc(lecturer.lecturerId.toString())
-          .set(lecturer.toFirebase());
+          .collection('lecturers') //Acess lecturers collection
+          .doc(lecturer.lecturerId.toString()) // Use lecturer ID as doc ID
+          .set(lecturer.toFirebase()); // save lecturer data to firestore
     } catch (e) {
       rethrow;
     }
   }
 
-  // Ambil senarai pensyarah (Untuk kegunaan Dropdown di Create Course)
   Stream<List<Lecturer>> getLecturerStream() {
     return _db.collection('lecturers').snapshots().map((snapshot) {
       return snapshot.docs.map((doc) {
-        return Lecturer.fromFirebase(doc.data());
+        //loop every lecturer document
+        return Lecturer.fromFirebase(doc.data()); // Convert Firestore to object
       }).toList();
     });
   }
 
-  // --- 2. FUNGSI UPDATE (KEMASKINI MAKLUMAT SUBJEK) ---
-  // --- FUNGSI UPDATE (EDIT SUBJEK) ---
+  // ============================================================
+  // 5. UPDATE COURSE SUBJECT (FACULTY REGISTRAR)
+  // ============================================================
+
   Future<void> updateCourse(CourseSubject subject) async {
     try {
       await _db
-          .collection('course_subjects')
-          .doc(subject.subjectId) // Mencari dokumen berdasarkan ID subjek
-          .update(subject.toFirebase());
+          .collection('course_subjects') // Access course_subjects collection
+          .doc(subject.subjectId) // Find document by subject ID
+          .update(subject.toFirebase()); // Update document with new data
 
       print("Course Subject ${subject.subjectName} Successfully updated!");
     } catch (e) {
@@ -64,13 +63,15 @@ class RegistrationController {
     }
   }
 
-  // --- 3. FUNGSI DELETE (UNTUK CRUD) ---
-  // --- FUNGSI DELETE (PADAM SUBJEK) ---
+  // ============================================================
+  // 6. DELETE COURSE SUBJECT (FACULTY REGISTRAR)
+  // ============================================================
+
   Future<void> deleteCourse(String subjectId) async {
     try {
       await _db
-          .collection('course_subjects')
-          .doc(subjectId) // Mencari dokumen berdasarkan ID yang dihantar
+          .collection('course_subjects') // Access course_subjects collection
+          .doc(subjectId) // Delete document by subject ID
           .delete();
 
       print("Course Subject bertipe ID $subjectId successfully deleted!");
@@ -80,67 +81,87 @@ class RegistrationController {
     }
   }
 
-  //Pusat adab CRUD untuk pusat adab register coq
+  // ============================================================
+  // 7. CREATE CO-Q ACTIVITY (PUSAT ADAB)
+  // ============================================================
 
-  // CREATE: Tambah aktiviti CoQ baharu
   Future<void> createCoQ(ModuleCoQ coq) async {
     try {
-      await _db.collection('module_coq').doc(coq.coqId).set(coq.toFirebase());
+      await _db
+          .collection('module_coq') // Access module_coq collection
+          .doc(coq.coqId) // Use Co-Q ID as document ID
+          .set(coq.toFirebase()); // Save Co-Q activity to Firestore
     } catch (e) {
       rethrow;
     }
   }
 
-  // UPDATE: Kemas kini data aktiviti CoQ sedia ada
+  // ============================================================
+  // 8. UPDATE CO-Q ACTIVITY (PUSAT ADAB)
+  // ============================================================
+
   Future<void> updateCoQ(ModuleCoQ coq) async {
     try {
       await _db
-          .collection('module_coq')
-          .doc(coq.coqId)
-          .update(coq.toFirebase());
+          .collection('module_coq') // Access module_coq collection
+          .doc(coq.coqId) // Find Co-Q document by ID
+          .update(coq.toFirebase()); // Update Co-Q activity in Firestore
     } catch (e) {
       rethrow;
     }
   }
 
-  // DELETE: Padam aktiviti CoQ
+  // ============================================================
+  // 9. DELETE CO-Q ACTIVITY  (PUSAT ADAB)
+  // ============================================================
+
   Future<void> deleteCoQ(String coqId) async {
     try {
-      await _db.collection('module_coq').doc(coqId).delete();
+      await _db
+          .collection('module_coq') // Access module_coq collection
+          .doc(coqId) // Find Co-Q document by ID
+          .delete(); // Delete Co-Q activity from Firestore
     } catch (e) {
       rethrow;
     }
   }
 
-  // ============================================
-  // --- FUNGSI COURSE REGISTRATION (STUDENT) ---
-  // ============================================
+  // ============================================================
+  // 10. SUBMIT COURSE REGISTRATION (STUDENT)
+  // ============================================================
 
-  // Hantar pendaftaran subjek baharu
   Future<void> submitCourseRegistration(RegistrationSubject reg) async {
     try {
       await _db
-          .collection('course_registrations')
-          .doc(reg.regId)
-          .set(reg.toFirebase());
+          .collection(
+            'course_registrations',
+          ) // Access course_registrations collection
+          .doc(reg.regId) // Use registration ID as document ID
+          .set(reg.toFirebase()); // Save course registration to Firestore
     } catch (e) {
       print("Ralat semasa submit registration: $e");
       rethrow;
     }
   }
 
-  // Function umum: ambil subject ikut status
+  // ============================================================
+  // 11. GET COURSE REGISTRATION BY STATUS
+  // ============================================================
+
   Stream<List<RegistrationSubject>> getRegistrationsByStatus(
     String studentId,
     String status,
   ) {
     return _db
-        .collection('course_registrations')
-        .where('student_id', isEqualTo: studentId)
-        .where('status', isEqualTo: status)
+        .collection(
+          'course_registrations',
+        ) // Access course_registrations collection
+        .where('student_id', isEqualTo: studentId) // Filter by student ID
+        .where('status', isEqualTo: status) // Pending or Approved
         .snapshots()
         .map((snapshot) {
           return snapshot.docs.map((doc) {
+            // Loop every registration document
             var data = doc.data();
 
             return RegistrationSubject(
@@ -173,20 +194,35 @@ class RegistrationController {
         });
   }
 
-  // Untuk page Course Registration for approval
+  // ============================================================
+  // 12. GET PENDING COURSE REGISTRATION (STUDENT)
+  // ============================================================
+
   Stream<List<RegistrationSubject>> getPendingRegistrations(String studentId) {
-    return getRegistrationsByStatus(studentId, 'Pending');
+    return getRegistrationsByStatus(studentId, 'Pending'); // For approval page
   }
 
-  // Untuk page Course Registration
+  // ============================================================
+  // 13. GET APPROVED COURSE REGISTRATION (STUDENT)
+  // ============================================================
+
   Stream<List<RegistrationSubject>> getApprovedRegistrations(String studentId) {
-    return getRegistrationsByStatus(studentId, 'Approved');
+    return getRegistrationsByStatus(
+      studentId,
+      'Approved',
+    ); // For registered page
   }
 
-  // Drop subject yang masih Pending
+  // ============================================================
+  // 14. DROP REGISTERED COURSE(STUDENT)
+  // ============================================================
+
   Future<void> dropRegisteredCourse(String regId) async {
     try {
-      await _db.collection('course_registrations').doc(regId).delete();
+      await _db
+          .collection('course_registrations')
+          .doc(regId) // Delete selected registration
+          .delete();
 
       print("Pendaftaran $regId berjaya digugurkan!");
     } catch (e) {
@@ -195,7 +231,10 @@ class RegistrationController {
     }
   }
 
-  // Semak duplicate subject
+  // ============================================================
+  // 15. CHECK DUPLICATE SUBJECT REGISTRATION (STUDENT)
+  // ============================================================
+
   Future<bool> isSubjectAlreadyRegistered(
     String studentId,
     String subjectId,
@@ -207,12 +246,11 @@ class RegistrationController {
           .where('subject_id', isEqualTo: subjectId)
           .get();
 
-      // Kira duplicate kalau subject masih Pending atau sudah Approved
       for (var doc in result.docs) {
         var status = doc.data()['status'];
 
         if (status == 'Pending' || status == 'Approved') {
-          return true;
+          return true; // Student already registered this subject
         }
       }
 
@@ -223,11 +261,14 @@ class RegistrationController {
     }
   }
 
-  // Lecturer approve subject
+  // ============================================================
+  // 16. APPROVE COURSE REGISTRATION (LECTURER)
+  // ============================================================
+
   Future<void> approveRegistration(String regId) async {
     try {
       await _db.collection('course_registrations').doc(regId).update({
-        'status': 'Approved',
+        'status': 'Approved', // Change status from Pending to Approved
       });
 
       print("Registration $regId approved!");
@@ -236,11 +277,11 @@ class RegistrationController {
       rethrow;
     }
   }
-  // ============================================
-  // --- FUNGSI LECTURER APPROVAL COURSE REG ---
-  // ============================================
 
-  // Lecturer view all pending/approved course registrations
+  // ============================================================
+  // 17. GET COURSE REGISTRATION (LECTURER)
+  // ============================================================
+
   Stream<QuerySnapshot> getCourseRegistrationsForLecturer() {
     return _db
         .collection('course_registrations')
@@ -248,22 +289,18 @@ class RegistrationController {
         .snapshots();
   }
 
-  // ============================================
-  // --- FUNGSI CO-Q REGISTRATION (STUDENT) ---
-  // ============================================
+  // ============================================================
+  // 18. GET CO-Q BOOKING SLOT (STUDENTS)
+  // ============================================================
 
-  int _coqToInt(dynamic value, {int defaultValue = 0}) {
-    if (value == null) return defaultValue;
-    if (value is int) return value;
-    return int.tryParse(value.toString()) ?? defaultValue;
-  }
-
-  // Get all Co-Q modules created by Pusat Adab
   Stream<QuerySnapshot> getCoQBookingSlots() {
-    return _db.collection('module_coq').snapshots();
+    return _db.collection('module_coq').snapshots(); // Get all Co-Q modules
   }
 
-  // Get Co-Q registrations for one student
+  // ============================================================
+  // 19. GET STUDENT CO-Q REGISTRATION (STUDENT)
+  // ============================================================
+
   Stream<QuerySnapshot> getStudentCoQRegistrations(String studentId) {
     return _db
         .collection('coq_registrations')
@@ -271,7 +308,10 @@ class RegistrationController {
         .snapshots();
   }
 
-  // Student book/register Co-Q
+  // ============================================================
+  // 20. BOOK CO-Q (STUDENT)
+  // ============================================================
+
   Future<void> bookCoQ({
     required String studentId,
     required String moduleDocId,
@@ -284,11 +324,13 @@ class RegistrationController {
     final moduleRef = _db.collection('module_coq').doc(moduleDocId);
 
     final regRef = _db
-        .collection('coq_registrations')
-        .doc('${studentId}_$coqId');
+        .collection('coq_registrations') // Access coq_registrations collection
+        .doc('${studentId}_$coqId'); // Prevent duplicate booking
 
     await _db.runTransaction((transaction) async {
-      final moduleSnapshot = await transaction.get(moduleRef);
+      final moduleSnapshot = await transaction.get(
+        moduleRef,
+      ); // Get Co-Q module data
       final regSnapshot = await transaction.get(regRef);
 
       if (!moduleSnapshot.exists) {
@@ -326,13 +368,15 @@ class RegistrationController {
         status: 'Registered',
       );
 
-      transaction.set(regRef, registration.toFirebase());
-
-      transaction.update(moduleRef, {'booked': booked + 1});
+      transaction.set(regRef, registration.toFirebase()); // Save registration
+      transaction.update(moduleRef, {'booked': booked + 1}); // Add booked slot
     });
   }
 
-  // Student drop Co-Q registration
+  // ============================================================
+  // 21. DROP CO-Q (STUDENT)
+  // ============================================================
+
   Future<void> dropCoQ({
     required String registrationDocId,
     required String moduleDocId,
@@ -353,10 +397,12 @@ class RegistrationController {
             : int.tryParse((data['booked'] ?? '0').toString()) ?? 0;
       }
 
-      transaction.delete(regRef);
+      transaction.delete(regRef); // Delete student Co-Q registration
 
       if (moduleSnapshot.exists) {
-        transaction.update(moduleRef, {'booked': booked > 0 ? booked - 1 : 0});
+        transaction.update(moduleRef, {
+          'booked': booked > 0 ? booked - 1 : 0, // Avoid negative booked value
+        });
       }
     });
   }
