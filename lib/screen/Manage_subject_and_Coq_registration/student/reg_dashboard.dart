@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../Manage_Menu/student_menu.dart';
-import 'reg_menu.dart'; // Pastikan anda mengimport fail reg_menu.dart
+import 'reg_menu.dart';
 
 class CourseRegDashboardScreen extends StatelessWidget {
   final String studentId;
+
   const CourseRegDashboardScreen({super.key, this.studentId = ''});
 
   @override
@@ -11,36 +12,43 @@ class CourseRegDashboardScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.white,
       drawer: StudentDrawer(studentId: studentId),
+
       appBar: AppBar(
         backgroundColor: const Color(0xFF5CE1E6),
         elevation: 0,
         automaticallyImplyLeading: false,
+        toolbarHeight: 64,
+        titleSpacing: 24,
         title: const Text(
           'SAMS',
           style: TextStyle(
             color: Colors.black,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w900,
             fontSize: 28,
             letterSpacing: 1.2,
           ),
         ),
         actions: [
           Builder(
-            builder: (context) => IconButton(
-              icon: const Icon(Icons.menu, color: Colors.black, size: 32),
-              onPressed: () {
-                Scaffold.of(context).openDrawer();
-              },
-            ),
+            builder: (context) {
+              return IconButton(
+                icon: const Icon(Icons.menu, color: Colors.black, size: 34),
+                onPressed: () {
+                  Scaffold.of(context).openDrawer();
+                },
+              );
+            },
           ),
+          const SizedBox(width: 6),
         ],
       ),
+
       body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 25.0, vertical: 20.0),
+        padding: const EdgeInsets.symmetric(horizontal: 25.0, vertical: 22.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. Ikon Bulat Menu yang kini boleh diklik
+            // Menu circle button
             InkWell(
               onTap: () {
                 Navigator.push(
@@ -50,48 +58,47 @@ class CourseRegDashboardScreen extends StatelessWidget {
                   ),
                 );
               },
-              borderRadius: BorderRadius.circular(50), // Efek klik membulat
+              borderRadius: BorderRadius.circular(50),
               child: Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(13),
                 decoration: const BoxDecoration(
                   color: Color(0xFFBCE3DC),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.list, size: 35, color: Colors.black87),
+                child: const Icon(Icons.list, size: 34, color: Colors.black87),
               ),
             ),
-            const SizedBox(height: 25),
 
-            // 2. Tajuk Halaman beserta Ikon Buku
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(
-                  Icons.menu_book_outlined,
-                  size: 55,
-                  color: Colors.black,
-                ),
-                const SizedBox(width: 15),
-                const Expanded(
-                  child: Text(
+            const SizedBox(height: 34),
+
+            // Page title with custom outline book icon
+            Padding(
+              padding: const EdgeInsets.only(left: 28),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: const [
+                  OpenBookIcon(size: 62),
+                  SizedBox(width: 18),
+                  Text(
                     'Open\nRegistration\nCourse',
                     style: TextStyle(
                       fontSize: 26,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w800,
                       color: Colors.black,
                       height: 1.1,
                       letterSpacing: 1.1,
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-            const SizedBox(height: 35),
 
-            // 3. Kotak Perhatian / Notifikasi
+            const SizedBox(height: 38),
+
+            // Attention box
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.fromLTRB(20, 20, 18, 20),
               decoration: BoxDecoration(
                 color: const Color(0xFFC7E2DC),
                 borderRadius: BorderRadius.circular(4),
@@ -103,15 +110,19 @@ class CourseRegDashboardScreen extends StatelessWidget {
                     'Attention Student',
                     style: TextStyle(
                       fontSize: 16,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w700,
                       color: Colors.black,
                     ),
                   ),
-                  const SizedBox(height: 10),
+
+                  const SizedBox(height: 12),
+
                   _buildBulletPoint(
                     'you are not allowed to open multiple tab at one time. system will automatically logout',
                   ),
-                  const SizedBox(height: 8),
+
+                  const SizedBox(height: 9),
+
                   _buildBulletPoint(
                     'any unethical behavior are recorded and discipline action will be taken to against you',
                   ),
@@ -149,4 +160,66 @@ class CourseRegDashboardScreen extends StatelessWidget {
       ],
     );
   }
+}
+
+// Custom book icon to match Figma style better
+class OpenBookIcon extends StatelessWidget {
+  final double size;
+
+  const OpenBookIcon({super.key, this.size = 60});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(painter: _OpenBookPainter()),
+    );
+  }
+}
+
+class _OpenBookPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black
+      ..strokeWidth = 3.1
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final w = size.width;
+    final h = size.height;
+
+    // Left page
+    final leftPage = Path()
+      ..moveTo(w * 0.08, h * 0.22)
+      ..lineTo(w * 0.40, h * 0.22)
+      ..quadraticBezierTo(w * 0.50, h * 0.22, w * 0.50, h * 0.34)
+      ..lineTo(w * 0.50, h * 0.78)
+      ..quadraticBezierTo(w * 0.35, h * 0.66, w * 0.08, h * 0.72)
+      ..close();
+
+    // Right page
+    final rightPage = Path()
+      ..moveTo(w * 0.92, h * 0.22)
+      ..lineTo(w * 0.60, h * 0.22)
+      ..quadraticBezierTo(w * 0.50, h * 0.22, w * 0.50, h * 0.34)
+      ..lineTo(w * 0.50, h * 0.78)
+      ..quadraticBezierTo(w * 0.65, h * 0.66, w * 0.92, h * 0.72)
+      ..close();
+
+    canvas.drawPath(leftPage, paint);
+    canvas.drawPath(rightPage, paint);
+
+    // Center fold
+    canvas.drawLine(
+      Offset(w * 0.50, h * 0.32),
+      Offset(w * 0.50, h * 0.80),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

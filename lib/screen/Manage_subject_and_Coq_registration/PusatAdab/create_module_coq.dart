@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:sams/Controller/Manage_Coq_and_Subject_Registration/RegistrationController.dart';
 import 'package:sams/Domain/module_coq.dart';
 import 'list_coq.dart';
+import 'package:sams/screen/Manage_Menu/pusat_adab_menu.dart';
 
 class CreateModuleCoQ extends StatefulWidget {
   const CreateModuleCoQ({super.key});
@@ -12,196 +13,422 @@ class CreateModuleCoQ extends StatefulWidget {
 }
 
 class _CreateModuleCoQState extends State<CreateModuleCoQ> {
-  final TextEditingController _idController = TextEditingController();
-  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _subjectController = TextEditingController();
   final TextEditingController _quotaController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
+  final TextEditingController _lecturerController = TextEditingController();
 
-  String? _selectedLecturerName;
+  DateTime? _selectedDate;
+  TimeOfDay? _selectedTime;
+
   final RegistrationController _controller = RegistrationController();
 
+  @override
+  void dispose() {
+    _subjectController.dispose();
+    _quotaController.dispose();
+    _locationController.dispose();
+    _lecturerController.dispose();
+    super.dispose();
+  }
+
+  String _generateCoqId() {
+    return 'COQ_${DateTime.now().millisecondsSinceEpoch}';
+  }
+
+  String _getDayName(DateTime date) {
+    switch (date.weekday) {
+      case DateTime.monday:
+        return 'Monday';
+      case DateTime.tuesday:
+        return 'Tuesday';
+      case DateTime.wednesday:
+        return 'Wednesday';
+      case DateTime.thursday:
+        return 'Thursday';
+      case DateTime.friday:
+        return 'Friday';
+      case DateTime.saturday:
+        return 'Saturday';
+      case DateTime.sunday:
+        return 'Sunday';
+      default:
+        return '';
+    }
+  }
+
+  String _formatDate(DateTime? date) {
+    if (date == null) return 'Value';
+
+    final day = date.day.toString().padLeft(2, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final year = date.year.toString();
+
+    return '$day/$month/$year';
+  }
+
+  String _formatTime(TimeOfDay? time) {
+    if (time == null) return 'Value';
+
+    final hour = time.hour.toString().padLeft(2, '0');
+    final minute = time.minute.toString().padLeft(2, '0');
+
+    return '$hour:$minute';
+  }
+
+  DateTime _combineDateAndTime() {
+    return DateTime(
+      _selectedDate!.year,
+      _selectedDate!.month,
+      _selectedDate!.day,
+      _selectedTime!.hour,
+      _selectedTime!.minute,
+    );
+  }
+
+  Future<void> _pickDate() async {
+    final DateTime now = DateTime.now();
+
+    final DateTime? pickedDate = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate ?? now,
+      firstDate: DateTime(2024),
+      lastDate: DateTime(2035),
+    );
+
+    if (pickedDate == null) return;
+
+    setState(() {
+      _selectedDate = pickedDate;
+    });
+  }
+
+  Future<void> _pickTime() async {
+    final TimeOfDay? pickedTime = await showTimePicker(
+      context: context,
+      initialTime: _selectedTime ?? TimeOfDay.now(),
+    );
+
+    if (pickedTime == null) return;
+
+    setState(() {
+      _selectedTime = pickedTime;
+    });
+  }
+
   void _submitForm() async {
-    if (_selectedLecturerName == null) {
+    if (_subjectController.text.trim().isEmpty ||
+        _quotaController.text.trim().isEmpty ||
+        _locationController.text.trim().isEmpty ||
+        _lecturerController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sila pilih pensyarah penasihat!')),
+        const SnackBar(content: Text('Please complete all fields.')),
       );
       return;
     }
 
-    ModuleCoQ newCoQ = ModuleCoQ(
-      coqId: _idController.text,
-      activityName: _nameController.text,
-      bookingQuota: int.tryParse(_quotaController.text) ?? 0,
-      location: _locationController.text,
-      lecturerName: _selectedLecturerName!,
+    if (_selectedDate == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Please select date.')));
+      return;
+    }
+
+    if (_selectedTime == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Please select time.')));
+      return;
+    }
+
+    final DateTime activityDateTime = _combineDateAndTime();
+
+    final ModuleCoQ newCoQ = ModuleCoQ(
+      coqId: _generateCoqId(),
+      activityName: _subjectController.text.trim(),
+      bookingQuota: int.tryParse(_quotaController.text.trim()) ?? 0,
+      location: _locationController.text.trim(),
+      lecturerName: _lecturerController.text.trim(),
+      date: Timestamp.fromDate(activityDateTime),
+      time: Timestamp.fromDate(activityDateTime),
+      day: _getDayName(activityDateTime),
+      booked: 0,
+      status: 'Available',
     );
 
     try {
       await _controller.createCoQ(newCoQ);
-      if (mounted) {
-        _showSuccessDialog(context);
-        Future.delayed(const Duration(seconds: 2), () {
-          if (mounted) {
-            Navigator.pop(context);
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => const ListCoQ()),
-            );
-          }
-        });
-      }
+
+      if (!mounted) return;
+
+      _showSuccessDialog(context);
+
+      Future.delayed(const Duration(seconds: 2), () {
+        if (!mounted) return;
+
+        Navigator.pop(context);
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const ListCoQ()),
+        );
+      });
     } catch (e) {
+      if (!mounted) return;
+
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Ralat: $e')));
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: Colors.white,
+      drawer: const PusatAdabMenu(),
+
       appBar: AppBar(
-        backgroundColor: const Color(0xFFE67E33),
+        automaticallyImplyLeading: false,
+        backgroundColor: const Color(0xFFA96366),
+        elevation: 0,
+        toolbarHeight: 64,
+        titleSpacing: 24,
         title: const Text(
-          'Register Co-Q',
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20.0),
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade300),
+          'SAMS',
+          style: TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.w900,
+            fontSize: 28,
+            letterSpacing: 2,
+            shadows: [
+              Shadow(
+                color: Colors.black38,
+                offset: Offset(2, 2),
+                blurRadius: 2,
+              ),
+            ],
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.sports_basketball_outlined, size: 70),
-                  const SizedBox(width: 15),
-                  const Text(
-                    'Register\nCo-Q Activity',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 25),
-              _buildInputField('Co-Q ID', _idController),
-              _buildInputField('Activity Name', _nameController),
-              _buildInputField(
-                'Booking Quota',
-                _quotaController,
-                isNumber: true,
-              ),
-              _buildInputField('Location', _locationController),
+        ),
+        actions: [
+          Builder(
+            builder: (context) {
+              return IconButton(
+                icon: const Icon(Icons.menu, color: Colors.black, size: 32),
+                onPressed: () {
+                  Scaffold.of(context).openDrawer();
+                },
+              );
+            },
+          ),
+          const SizedBox(width: 4),
+        ],
+      ),
 
-              // Dropdown Lecturer
-              Padding(
-                padding: const EdgeInsets.only(bottom: 15.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Advisor / Lecturer Name',
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.only(top: 60, bottom: 35),
+        child: Center(
+          child: Container(
+            width: 295,
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 18),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: const Color(0xFFE0E0E0), width: 1),
+              borderRadius: BorderRadius.circular(7),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 2),
+
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: const [
+                    OpenRibbonIcon(size: 64),
+                    SizedBox(width: 16),
+                    Text(
+                      'Register\nCo-Q',
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 23,
                         fontWeight: FontWeight.w500,
+                        letterSpacing: 2,
+                        height: 1.05,
+                        color: Colors.black,
                       ),
-                    ),
-                    const SizedBox(height: 5),
-                    StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance
-                          .collection('lecturer')
-                          .snapshots(),
-                      builder: (context, snapshot) {
-                        if (!snapshot.hasData) {
-                          return const LinearProgressIndicator();
-                        }
-                        List<DropdownMenuItem<String>> lecturerItems = snapshot
-                            .data!
-                            .docs
-                            .map((doc) {
-                              var data = doc.data() as Map<String, dynamic>;
-                              String fullName = data['full_name'] ?? 'No Name';
-                              return DropdownMenuItem(
-                                value: fullName,
-                                child: Text(fullName),
-                              );
-                            })
-                            .toList();
-
-                        return DropdownButtonFormField<String>(
-                          decoration: InputDecoration(
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 15,
-                            ),
-                          ),
-                          hint: const Text("Select Advisor"),
-                          initialValue: _selectedLecturerName,
-                          items: lecturerItems,
-                          onChanged: (value) =>
-                              setState(() => _selectedLecturerName = value),
-                        );
-                      },
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: _submitForm,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF333333),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+
+                const SizedBox(height: 22),
+
+                _buildTextInput(
+                  label: 'Subject',
+                  controller: _subjectController,
+                ),
+
+                _buildPickerInput(
+                  label: 'Date',
+                  value: _formatDate(_selectedDate),
+                  onTap: _pickDate,
+                ),
+
+                _buildPickerInput(
+                  label: 'Time',
+                  value: _formatTime(_selectedTime),
+                  onTap: _pickTime,
+                ),
+
+                _buildTextInput(
+                  label: 'Location',
+                  controller: _locationController,
+                ),
+
+                _buildTextInput(
+                  label: 'Booking Quota',
+                  controller: _quotaController,
+                  isNumber: true,
+                ),
+
+                _buildTextInput(
+                  label: 'Lecture Name',
+                  controller: _lecturerController,
+                ),
+
+                const SizedBox(height: 12),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 34,
+                  child: ElevatedButton(
+                    onPressed: _submitForm,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2F2F2F),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: EdgeInsets.zero,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                    ),
+                    child: const Text(
+                      'Submit',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w400,
+                      ),
                     ),
                   ),
-                  child: const Text(
-                    'Submit',
-                    style: TextStyle(color: Colors.white, fontSize: 18),
-                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildInputField(
-    String label,
-    TextEditingController controller, {
+  Widget _buildTextInput({
+    required String label,
+    required TextEditingController controller,
     bool isNumber = false,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 15.0),
+      padding: const EdgeInsets.only(bottom: 11),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             label,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            style: const TextStyle(
+              fontSize: 14,
+              color: Colors.black87,
+              fontWeight: FontWeight.w400,
+            ),
           ),
-          const SizedBox(height: 5),
-          TextField(
-            controller: controller,
-            keyboardType: isNumber ? TextInputType.number : TextInputType.text,
-            decoration: InputDecoration(
-              hintText: 'Value',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
+
+          const SizedBox(height: 6),
+
+          SizedBox(
+            height: 36,
+            child: TextField(
+              controller: controller,
+              keyboardType: isNumber
+                  ? TextInputType.number
+                  : TextInputType.text,
+              style: const TextStyle(fontSize: 14),
+              decoration: InputDecoration(
+                hintText: 'Value',
+                hintStyle: const TextStyle(
+                  color: Color(0xFFBDBDBD),
+                  fontSize: 14,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 0,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(7),
+                  borderSide: const BorderSide(
+                    color: Color(0xFFD7D7D7),
+                    width: 1,
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(7),
+                  borderSide: const BorderSide(
+                    color: Color(0xFFD7D7D7),
+                    width: 1,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPickerInput({
+    required String label,
+    required String value,
+    required VoidCallback onTap,
+  }) {
+    final bool isPlaceholder = value == 'Value';
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 11),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 14,
+              color: Colors.black87,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+
+          const SizedBox(height: 6),
+
+          InkWell(
+            onTap: onTap,
+            child: Container(
+              height: 36,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                border: Border.all(color: const Color(0xFFD7D7D7), width: 1),
+                borderRadius: BorderRadius.circular(7),
+              ),
+              alignment: Alignment.centerLeft,
+              child: Text(
+                value,
+                style: TextStyle(
+                  color: isPlaceholder
+                      ? const Color(0xFFBDBDBD)
+                      : Colors.black87,
+                  fontSize: 14,
+                ),
               ),
             ),
           ),
@@ -230,4 +457,52 @@ class _CreateModuleCoQState extends State<CreateModuleCoQ> {
       ),
     );
   }
+}
+
+class OpenRibbonIcon extends StatelessWidget {
+  final double size;
+
+  const OpenRibbonIcon({super.key, this.size = 64});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(painter: _OpenRibbonPainter()),
+    );
+  }
+}
+
+class _OpenRibbonPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black87
+      ..strokeWidth = 3.2
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final w = size.width;
+    final h = size.height;
+
+    canvas.drawCircle(Offset(w * 0.5, h * 0.34), w * 0.30, paint);
+
+    final leftRibbon = Path()
+      ..moveTo(w * 0.31, h * 0.58)
+      ..lineTo(w * 0.31, h * 0.92)
+      ..lineTo(w * 0.50, h * 0.78);
+
+    final rightRibbon = Path()
+      ..moveTo(w * 0.69, h * 0.58)
+      ..lineTo(w * 0.69, h * 0.92)
+      ..lineTo(w * 0.50, h * 0.78);
+
+    canvas.drawPath(leftRibbon, paint);
+    canvas.drawPath(rightRibbon, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
