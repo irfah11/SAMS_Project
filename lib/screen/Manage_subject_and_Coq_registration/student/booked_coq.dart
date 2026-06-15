@@ -1,7 +1,54 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../../Controller/Manage Attendance/AttendanceController.dart';
+import '../../../Controller/Manage_Coq_and_Subject_Registration/RegistrationController.dart';
+import '../../../Domain/module_coq.dart';
 
-class BookedCoqScreen extends StatelessWidget {
+class BookedCoqScreen extends StatefulWidget {
   const BookedCoqScreen({super.key});
+
+  @override
+  State<BookedCoqScreen> createState() => _BookedCoqScreenState();
+}
+
+class _BookedCoqScreenState extends State<BookedCoqScreen> {
+  final String _uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+  final RegistrationController _controller = RegistrationController();
+
+  bool _isLoading = true;
+  String? _studentId;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStudentId();
+  }
+
+  Future<void> _loadStudentId() async {
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(_uid)
+        .get();
+    _studentId = userDoc.data()?['student_id'] as String?;
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  Future<void> _book(ModuleCoQ coq) async {
+    try {
+      await _controller.registerForCoQ(_studentId!, coq);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Booked "${coq.activityName}" successfully!')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -10,6 +57,10 @@ class BookedCoqScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: const Color(0xFF64D2EC),
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: const Text(
           'SAMS',
           style: TextStyle(
@@ -18,185 +69,138 @@ class BookedCoqScreen extends StatelessWidget {
             fontSize: 24,
           ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.menu, color: Colors.black, size: 28),
-            onPressed: () {},
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 1. My Co-Q Header with Badge Icon
+                  Row(
+                    children: const [
+                      Icon(Icons.military_tech_outlined, size: 60),
+                      SizedBox(width: 15),
+                      Text(
+                        'MY Co-Q',
+                        style: TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w400,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 30),
+
+                  // 2. Section Title
+                  const Text(
+                    'Booking Slot',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w500),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _studentId != null
+                        ? 'Student ID: $_studentId'
+                        : 'Your profile is missing a "student_id" field.',
+                    style: const TextStyle(fontSize: 13, color: Colors.black54),
+                  ),
+                  const SizedBox(height: 15),
+
+                  // 3. Available Co-Q activities
+                  StreamBuilder<QuerySnapshot>(
+                    stream: AttendanceController.coqModulesStream(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Padding(
+                          padding: EdgeInsets.only(top: 20),
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+                      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                        return const Padding(
+                          padding: EdgeInsets.only(top: 20),
+                          child: Center(
+                            child: Text('No Co-Q activities available yet.'),
+                          ),
+                        );
+                      }
+                      return Column(
+                        children: snapshot.data!.docs.map((doc) {
+                          final data = doc.data() as Map<String, dynamic>;
+                          final coq = ModuleCoQ(
+                            coqId: data['coq_id'] ?? doc.id,
+                            activityName:
+                                data['activity_name'] ?? 'Unknown Activity',
+                            bookingQuota: data['booking_quota'] ?? 0,
+                            location: data['location'] ?? '-',
+                            lecturerName: data['lecturer_name'] ?? '-',
+                          );
+                          return _buildCoQCard(coq);
+                        }).toList(),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+
+  Widget _buildCoQCard(ModuleCoQ coq) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 15),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE0F7FA),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  coq.activityName,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Location: ${coq.location}',
+                  style: const TextStyle(fontSize: 13, color: Colors.black54),
+                ),
+                Text(
+                  'Advisor: ${coq.lecturerName}',
+                  style: const TextStyle(fontSize: 13, color: Colors.black54),
+                ),
+                Text(
+                  'Quota: ${coq.bookingQuota} slots',
+                  style: const TextStyle(fontSize: 13, color: Colors.black54),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          ElevatedButton(
+            onPressed: _studentId == null ? null : () => _book(coq),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF81D4FA),
+              foregroundColor: Colors.black,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text('Book'),
           ),
         ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 1. My Co-Q Header with Badge Icon
-            Row(
-              children: [
-                const Icon(
-                  Icons.military_tech_outlined,
-                  size: 60,
-                ), // Mockup badge icon
-                const SizedBox(width: 15),
-                const Text(
-                  'MY Co-Q',
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w400,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 30),
-
-            // 2. Section Title
-            const Text(
-              'Booking Slot',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(height: 15),
-
-            // 3. Booking Table
-            Table(
-              border: TableBorder.all(color: Colors.grey.shade400, width: 0.5),
-              columnWidths: const {
-                0: IntrinsicColumnWidth(), // no
-                1: FlexColumnWidth(2), // Subject
-                2: FlexColumnWidth(2), // Date & Time
-                3: FlexColumnWidth(1.5), // Location
-                4: FlexColumnWidth(1.5), // Booking
-              },
-              children: [
-                // Table Header
-                _buildTableHeader(),
-
-                // Table Data Rows
-                _buildTableRow(
-                  "1",
-                  "Memanah",
-                  "30/12/26\n9.00",
-                  "Gambang",
-                  "48/50",
-                  true,
-                ),
-                _buildTableRow(
-                  "2",
-                  "Chess",
-                  "31/12/26\n9.00",
-                  "Pekan",
-                  "50/50",
-                  false,
-                ), // Full
-                _buildTableRow(
-                  "3",
-                  "3D\nModelling",
-                  "25/5/26\n9.00",
-                  "Pekan",
-                  "35/50",
-                  true,
-                ),
-                _buildTableRow(
-                  "4",
-                  "Mobile\nPhotography",
-                  "26/5/26\n9.00",
-                  "Gambang",
-                  "17/50",
-                  true,
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // --- Table Helper Methods ---
-
-  TableRow _buildTableHeader() {
-    return const TableRow(
-      children: [
-        _CellText("no", isHeader: true),
-        _CellText("Subject", isHeader: true),
-        _CellText("Date&\nTime", isHeader: true),
-        _CellText("location", isHeader: true),
-        _CellText("Booking", isHeader: true),
-      ],
-    );
-  }
-
-  TableRow _buildTableRow(
-    String no,
-    String subject,
-    String dateTime,
-    String loc,
-    String status,
-    bool canBook,
-  ) {
-    return TableRow(
-      children: [
-        _CellText(no),
-        _CellText(subject),
-        _CellText(dateTime),
-        _CellText(loc),
-        Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 15, bottom: 5),
-              child: Text(status, style: const TextStyle(fontSize: 12)),
-            ),
-            if (canBook)
-              Padding(
-                padding: const EdgeInsets.all(4.0),
-                child: SizedBox(
-                  height: 30,
-                  child: ElevatedButton(
-                    onPressed: () {},
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF81D4FA),
-                      foregroundColor: Colors.black,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      padding: EdgeInsets.zero,
-                    ),
-                    child: const Text("Book", style: TextStyle(fontSize: 10)),
-                  ),
-                ),
-              )
-            else
-              const SizedBox(
-                height: 34,
-              ), // Keeps alignment if button is missing
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-// Helper widget for table cell text alignment
-class _CellText extends StatelessWidget {
-  final String text;
-  final bool isHeader;
-  const _CellText(this.text, {this.isHeader = false});
-
-  @override
-  Widget build(BuildContext context) {
-    return TableCell(
-      verticalAlignment: TableCellVerticalAlignment.middle,
-      child: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: Text(
-          text,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: isHeader ? FontWeight.w500 : FontWeight.normal,
-          ),
-        ),
       ),
     );
   }

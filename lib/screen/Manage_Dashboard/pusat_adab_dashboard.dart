@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../Manage Attendance/Pusat Adab/Co-QList.dart';
 import '../../auth/auth_service.dart';
@@ -84,14 +86,29 @@ class PusatAdabDashboard extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Welcome Back,\nNURUL BALQIS',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                      height: 1.2,
-                      fontFamily: 'Serif',
+                  Flexible(
+                    child: FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                      future: FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(FirebaseAuth.instance.currentUser!.uid)
+                          .get(),
+                      builder: (context, snapshot) {
+                        String name = 'Pusat Adab';
+                        if (snapshot.hasData && snapshot.data!.exists) {
+                          name = (snapshot.data!.data()?['name'] ?? 'Pusat Adab')
+                              .toString();
+                        }
+                        return Text(
+                          'Welcome Back,\n${name.toUpperCase()}',
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black,
+                            height: 1.2,
+                            fontFamily: 'Serif',
+                          ),
+                        );
+                      },
                     ),
                   ),
                   ClipOval(

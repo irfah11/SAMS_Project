@@ -209,8 +209,9 @@ class _EditCourseState extends State<EditCourse> {
                           .collection('lecturer')
                           .snapshots(),
                       builder: (context, snapshot) {
-                        if (!snapshot.hasData)
+                        if (!snapshot.hasData) {
                           return const LinearProgressIndicator();
+                        }
 
                         List<DropdownMenuItem<String>> lecturerItems = [];
                         for (var doc in snapshot.data!.docs) {
@@ -233,7 +234,7 @@ class _EditCourseState extends State<EditCourse> {
                               horizontal: 15,
                             ),
                           ),
-                          value: _selectedLecturerName,
+                          initialValue: _selectedLecturerName,
                           items: lecturerItems,
                           onChanged: (value) {
                             setState(() {

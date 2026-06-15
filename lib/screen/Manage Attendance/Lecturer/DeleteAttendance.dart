@@ -21,45 +21,78 @@ class _DeleteAttendanceScreenState extends State<DeleteAttendanceScreen> {
   static const _blue = Color(0xFF4C66EE);
   bool _isDeleting = false;
 
-  Future<void> _confirmDelete() async {
+  /// SDD verifySessionStatus() — a session can only be deleted if it has not
+  /// already been completed (Passed).
+  Future<bool> verifySessionStatus() async {
+    final doc = await FirebaseFirestore.instance
+        .collection('AttendanceSession')
+        .doc(widget.sessionId)
+        .get();
+    final status = doc.data()?['session_status'] as String? ?? '';
+    return status != 'Passed';
+  }
+
+  /// SDD cancelSession() — delete the session and its attendance records.
+  Future<void> cancelSession() =>
+      AttendanceController.deleteSession(widget.sessionId);
+
+  /// SDD displayStatus(msg) — show a status message to the lecturer.
+  void displayStatus(String msg, {bool success = true}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: success ? Colors.green : Colors.red,
+    ));
+  }
+
+  /// SDD requestDeletion() — user-confirmed deletion flow.
+  Future<void> requestDeletion() async {
     setState(() => _isDeleting = true);
     try {
-      await AttendanceController.deleteSession(widget.sessionId);
+      if (!await verifySessionStatus()) {
+        if (mounted) {
+          setState(() => _isDeleting = false);
+          _showCannotDelete();
+        }
+        return;
+      }
+      await cancelSession();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Class has been deleted successfully.'),
-            backgroundColor: Colors.green));
+        displayStatus('Class has been deleted successfully.');
         Navigator.pop(context);
         Navigator.pop(context);
       }
     } on SessionPassedException {
       if (mounted) {
         setState(() => _isDeleting = false);
-        showDialog(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text('Cannot Delete'),
-            content: const Text(
-                'This session has been completed (Passed). '
-                'Completed sessions cannot be deleted to preserve records.'),
-            actions: [
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                    backgroundColor: _blue, foregroundColor: Colors.white),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
+        _showCannotDelete();
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isDeleting = false);
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error: $e')));
+        displayStatus('Error: $e', success: false);
       }
     }
+  }
+
+  void _showCannotDelete() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Cannot Delete'),
+        content: const Text(
+            'This session has been completed (Passed). '
+            'Completed sessions cannot be deleted to preserve records.'),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: _blue, foregroundColor: Colors.white),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -159,7 +192,7 @@ class _DeleteAttendanceScreenState extends State<DeleteAttendanceScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton(
-                  onPressed: _isDeleting ? null : _confirmDelete,
+                  onPressed: _isDeleting ? null : requestDeletion,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red.shade600,
                     foregroundColor: Colors.white,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'auth_service.dart';
 import 'register_screen.dart';
+import 'seed_demo_data.dart';
 
 import 'package:sams/screen/Manage_Dashboard/treasury_dashboard.dart';
 import 'package:sams/screen/Manage_Dashboard/student_dashboard.dart';
@@ -23,6 +24,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _isLoading = false;
   bool _isSettingUp = false;
+  bool _isSeeding = false;
   String _selectedRole = 'student'; // Default role
   final List<String> _roles = [
     'student',
@@ -115,6 +117,62 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
     }
+  }
+
+  Future<void> _seedDemoData() async {
+    setState(() => _isSeeding = true);
+    String summary;
+    try {
+      summary = await SeedDemoData.run();
+    } catch (e) {
+      summary = 'Error while seeding: $e';
+    }
+    if (!mounted) return;
+    setState(() => _isSeeding = false);
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Demo Data Ready'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(summary, style: const TextStyle(fontSize: 12)),
+              const SizedBox(height: 12),
+              const Text('Lecturers',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              ...SeedDemoData.lecturers.map((l) =>
+                  _credRow(l['name'] as String, l['email'] as String)),
+              const SizedBox(height: 8),
+              const Text('Students',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              ...SeedDemoData.students.map((s) => _credRow(
+                  '${s['name']} (${s['student_id']})', s['email'] as String)),
+              const SizedBox(height: 8),
+              const Text('Pusat Adab',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              ...SeedDemoData.pusatAdab.map((a) =>
+                  _credRow(a['name'] as String, a['email'] as String)),
+              const SizedBox(height: 8),
+              const Text('Password for all: sams1234',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w600, color: Colors.green)),
+            ],
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFE67E33),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _credRow(String role, String email) => Padding(
@@ -346,6 +404,39 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 6),
               const Text(
                 'First time? Tap above to create all test accounts automatically.',
+                style: TextStyle(fontSize: 11, color: Colors.black38),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+
+              // ── DEV ONLY: Seed full demo dataset (users + attendance data) ──
+              SizedBox(
+                width: double.infinity,
+                height: 44,
+                child: OutlinedButton.icon(
+                  onPressed: _isSeeding ? null : _seedDemoData,
+                  icon: _isSeeding
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.dataset_outlined, size: 18),
+                  label: Text(
+                    _isSeeding ? 'Seeding demo data...' : 'Seed Demo Data',
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFE67E33),
+                    side: const BorderSide(color: Color(0xFFE67E33)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                '2 lecturers, 5 students, 2 Pusat Adab, 3 subjects + Co-Q, with sessions & records.',
                 style: TextStyle(fontSize: 11, color: Colors.black38),
                 textAlign: TextAlign.center,
               ),

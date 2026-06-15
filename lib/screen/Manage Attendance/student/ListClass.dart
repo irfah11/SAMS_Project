@@ -41,7 +41,7 @@ class _StudentListClassScreenState extends State<StudentListClassScreen> {
     final map = <String, String>{};
     for (final doc in snap.docs) {
       final d = doc.data();
-      final sessionId = d['session_id'] as String? ?? '';
+      final sessionId = d['session_id']?.toString() ?? '';
       var status = d['status'] as String? ?? 'Absent';
       if (status == 'Present') status = 'Attend';
       if (sessionId.isNotEmpty) map[sessionId] = status;
@@ -88,22 +88,20 @@ class _StudentListClassScreenState extends State<StudentListClassScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              const Icon(Icons.people_outline, size: 40),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Manage Attendance',
-                          style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.w500)),
-                      Text(widget.subjectName,
-                          style: const TextStyle(
-                              fontSize: 14, color: Colors.black54)),
-                    ]),
-              ),
+            Row(children: const [
+              Icon(Icons.people_outline, size: 32),
+              SizedBox(width: 10),
+              Text('Manage  Attendance',
+                  style:
+                      TextStyle(fontSize: 20, fontWeight: FontWeight.w500)),
             ]),
+            const SizedBox(height: 16),
+            Center(
+              child: Text(widget.subjectName,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w600)),
+            ),
             const SizedBox(height: 20),
             StreamBuilder<QuerySnapshot>(
               stream: stream,
@@ -114,29 +112,56 @@ class _StudentListClassScreenState extends State<StudentListClassScreen> {
                 if (!snap.hasData || snap.data!.docs.isEmpty) {
                   return _buildEmpty();
                 }
-                final docs = snap.data!.docs;
-                return Table(
-                  border: TableBorder.all(
-                      color: Colors.grey.shade400, width: 0.5),
-                  columnWidths: const {
-                    0: FlexColumnWidth(2.5),
-                    1: FlexColumnWidth(3),
-                    2: FlexColumnWidth(2),
-                  },
-                  children: [
-                    _buildHeader(),
-                    ...docs.map((doc) {
-                      final d = doc.data() as Map<String, dynamic>;
-                      return _buildRow(context, doc.id, d);
-                    }),
-                  ],
-                );
+                final docs = snap.data!.docs.toList()
+                  ..sort((a, b) {
+                    final ta = (a.data() as Map<String, dynamic>)['start_time'] as Timestamp?;
+                    final tb = (b.data() as Map<String, dynamic>)['start_time'] as Timestamp?;
+                    if (ta == null || tb == null) return 0;
+                    return ta.compareTo(tb);
+                  });
+                return displayClassList(context, docs);
               },
             ),
           ],
         ),
       ),
     );
+  }
+
+  /// SDD displayClassList() — render the session table for this subject/module.
+  Widget displayClassList(
+      BuildContext context, List<QueryDocumentSnapshot> docs) {
+    return Table(
+      border: TableBorder.all(color: Colors.grey.shade400, width: 0.5),
+      columnWidths: const {
+        0: FlexColumnWidth(2.5),
+        1: FlexColumnWidth(3),
+        2: FlexColumnWidth(2),
+      },
+      children: [
+        _buildHeader(),
+        ...docs.map((doc) {
+          final d = doc.data() as Map<String, dynamic>;
+          return _buildRow(context, doc.id, d);
+        }),
+      ],
+    );
+  }
+
+  /// SDD selectSession() — open the check-in screen for the chosen session.
+  void selectSession(
+      BuildContext context, String docId, Map<String, dynamic> data) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AttendanceCheckInScreen(
+          sessionId:   docId,
+          sessionData: data,
+          subjectName: widget.subjectName,
+          studentId:   widget.studentId,
+        ),
+      ),
+    ).then((_) => _loadPersonalStatus());
   }
 
   TableRow _buildHeader() {
@@ -167,17 +192,7 @@ class _StudentListClassScreenState extends State<StudentListClassScreen> {
 
     void goCheckIn() {
       if (!canCheckIn) return;
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => AttendanceCheckInScreen(
-            sessionId:   docId,
-            sessionData: data,
-            subjectName: widget.subjectName,
-            studentId:   widget.studentId,
-          ),
-        ),
-      ).then((_) => _loadPersonalStatus());
+      selectSession(context, docId, data);
     }
 
     return TableRow(children: [

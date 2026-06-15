@@ -22,6 +22,7 @@ dependencies:
   http: ^1.2.0              # Calls our backend to create Stripe PaymentIntents
   pdf: ^3.11.1
   printing: ^5.13.2
+  geolocator: ^14.0.3
 
 dev_dependencies:
   flutter_test:
@@ -35,3 +36,4 @@ flutter:
     - assets/LarianAmal.jpg
     - assets/Mobility.jpg
     - assets/Programming.jpg
+    - assets/card_picture.png

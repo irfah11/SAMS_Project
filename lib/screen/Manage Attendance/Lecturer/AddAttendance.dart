@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'GenerateAttendance.dart';
+import 'package:geolocator/geolocator.dart';
 
 class AddAttendanceScreen extends StatefulWidget {
   final String? subjectId;
@@ -33,6 +33,10 @@ class _AddAttendanceScreenState extends State<AddAttendanceScreen> {
   final _descController   = TextEditingController();
   final _radiusController = TextEditingController(text: '100');
   bool _isSaving = false;
+
+  bool _isOnline = false;
+  GeoPoint? _sessionLocation;
+  bool _isCapturingLocation = false;
 
   @override
   void dispose() {
@@ -85,21 +89,80 @@ class _AddAttendanceScreenState extends State<AddAttendanceScreen> {
     return s < e;
   }
 
-  Future<void> _save() async {
+  Future<void> getCurrentLocation() async {
+    setState(() => _isCapturingLocation = true);
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        throw 'Location services are disabled. Please enable GPS.';
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        throw 'Location permission denied.';
+      }
+
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings:
+            const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+
+      if (mounted) {
+        setState(() {
+          _sessionLocation = GeoPoint(pos.latitude, pos.longitude);
+          _isCapturingLocation = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isCapturingLocation = false);
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
+  }
+
+  /// SDD inputSessionDetails() — validate the form the lecturer filled in.
+  bool inputSessionDetails() {
     if (_selectedDate == null ||
         _startTime == null ||
         _endTime == null ||
         _descController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please fill in all required fields.')));
-      return;
+      displayStatus('Please fill in all required fields.', success: false);
+      return false;
     }
     if (!_isStartBeforeEnd()) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('End time must be after start time.'),
-          backgroundColor: Colors.red));
-      return;
+      displayStatus('End time must be after start time.', success: false);
+      return false;
     }
+    if (!_isOnline && _sessionLocation == null) {
+      displayStatus(
+          'Please capture the class location, or mark it as an online class.',
+          success: false);
+      return false;
+    }
+    return true;
+  }
+
+  /// SDD setCheckInRadius() — the check-in radius (metres) entered, default 100.
+  int setCheckInRadius() => int.tryParse(_radiusController.text.trim()) ?? 100;
+
+  /// SDD displayStatus(msg) — show a status message to the lecturer.
+  void displayStatus(String msg, {bool success = true}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: success ? Colors.green : Colors.red,
+    ));
+  }
+
+  /// SDD createSession() — validate then write the new AttendanceSession.
+  Future<void> createSession() async {
+    if (!inputSessionDetails()) return;
 
     setState(() => _isSaving = true);
 
@@ -109,12 +172,12 @@ class _AddAttendanceScreenState extends State<AddAttendanceScreen> {
           .collection('users').doc(uid).get();
       final lecturerName =
           userDoc.data()?['name'] as String? ?? 'Lecturer';
-      final radius = int.tryParse(_radiusController.text.trim()) ?? 100;
+      final radius = setCheckInRadius();
 
       // Option B: use numeric lecturer_id (e.g. 1002) not Firebase Auth UID
       final lecturerId = widget.lecturerId;
 
-      final docRef = await FirebaseFirestore.instance
+      await FirebaseFirestore.instance
           .collection('AttendanceSession')
           .add({
         'Lecturer_id':          lecturerId,   // numeric id (e.g. 1002)
@@ -127,7 +190,8 @@ class _AddAttendanceScreenState extends State<AddAttendanceScreen> {
         'end_time':             _toTimestamp(_endTime!),
         'session_description':  _descController.text.trim(),
         'attendance_code':      '',
-        'session_location':     const GeoPoint(3.5568, 103.4268),
+        'is_online':            _isOnline,
+        'session_location':     _isOnline ? null : _sessionLocation,
         'radius_meters':        radius,
         'session_status':       'Pending',
         'created_at':           Timestamp.now(),
@@ -135,36 +199,38 @@ class _AddAttendanceScreenState extends State<AddAttendanceScreen> {
 
       if (mounted) {
         setState(() => _isSaving = false);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Attendance Session Created Successfully'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2)));
-
-        // Navigate to GenerateAttendance as per SDD algorithm
-        final sessionData = {
-          'Lecturer_id':         widget.lecturerId,
-          'subject_name':        widget.subjectName,
-          'session_description': _descController.text.trim(),
-          'start_time':          _toTimestamp(_startTime!),
-          'end_time':            _toTimestamp(_endTime!),
-          'session_status':      'Pending',
-        };
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => GenerateAttendanceScreen(
-              sessionId:   docRef.id,
-              sessionData: sessionData,
-              subjectName: widget.subjectName,
-            ),
+        // Figure 3.5.66 — add class successful dialog, then back to the list.
+        await showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
+            content: Column(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.check_circle_outline,
+                  size: 64, color: Colors.green.shade600),
+              const SizedBox(height: 16),
+              const Text('Attendance Class Added',
+                  textAlign: TextAlign.center,
+                  style:
+                      TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              const Text('You had successfully Add Class Attendance.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 14, color: Colors.black54)),
+            ]),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('OK')),
+            ],
           ),
         );
+        if (mounted) Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isSaving = false);
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error: $e')));
+        displayStatus('Error: $e', success: false);
       }
     }
   }
@@ -262,18 +328,68 @@ class _AddAttendanceScreenState extends State<AddAttendanceScreen> {
             ),
             const SizedBox(height: 16),
 
-            _label('Check-in Radius (metres)'),
-            const SizedBox(height: 6),
-            TextField(
-              controller: _radiusController,
-              keyboardType: TextInputType.number,
-              decoration: _inputDeco('Default: 100', Icons.radar_outlined),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade400),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _isOnline,
+                onChanged: (v) => setState(() => _isOnline = v),
+                title: const Text('Online Class',
+                    style: TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w600)),
+                subtitle: const Text(
+                    'No location check required for check-in',
+                    style: TextStyle(fontSize: 12, color: Colors.black54)),
+              ),
             ),
-            const SizedBox(height: 8),
-            const Text(
-                'Location: UMPSA Gambang Campus (simulated GPS)',
-                style: TextStyle(fontSize: 12, color: Colors.black45)),
-            const SizedBox(height: 36),
+            const SizedBox(height: 16),
+
+            if (!_isOnline) ...[
+              _label('Check-in Radius (metres)'),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _radiusController,
+                keyboardType: TextInputType.number,
+                decoration: _inputDeco('Default: 100', Icons.radar_outlined),
+              ),
+              const SizedBox(height: 16),
+
+              _label('Class Location *'),
+              const SizedBox(height: 6),
+              Row(children: [
+                Expanded(
+                  child: Text(
+                    _sessionLocation != null
+                        ? '${_sessionLocation!.latitude.toStringAsFixed(5)}, '
+                            '${_sessionLocation!.longitude.toStringAsFixed(5)}'
+                        : 'Not set — tap to capture your current location',
+                    style: TextStyle(
+                        fontSize: 13,
+                        color: _sessionLocation != null
+                            ? Colors.black87
+                            : Colors.grey),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed:
+                      _isCapturingLocation ? null : getCurrentLocation,
+                  icon: _isCapturingLocation
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.my_location),
+                  label:
+                      Text(_sessionLocation != null ? 'Update' : 'Capture'),
+                ),
+              ]),
+              const SizedBox(height: 8),
+            ],
+            const SizedBox(height: 28),
 
             Row(children: [
               Expanded(
@@ -290,7 +406,7 @@ class _AddAttendanceScreenState extends State<AddAttendanceScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton(
-                  onPressed: _isSaving ? null : _save,
+                  onPressed: _isSaving ? null : createSession,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _blue,
                     foregroundColor: Colors.white,

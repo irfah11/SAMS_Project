@@ -111,8 +111,9 @@ class _EditCoQState extends State<EditCoQ> {
                           .collection('lecturer')
                           .snapshots(),
                       builder: (context, snapshot) {
-                        if (!snapshot.hasData)
+                        if (!snapshot.hasData) {
                           return const LinearProgressIndicator();
+                        }
                         return DropdownButtonFormField<String>(
                           decoration: InputDecoration(
                             border: OutlineInputBorder(
@@ -122,7 +123,7 @@ class _EditCoQState extends State<EditCoQ> {
                               horizontal: 15,
                             ),
                           ),
-                          value: _selectedLecturerName,
+                          initialValue: _selectedLecturerName,
                           items: snapshot.data!.docs.map((doc) {
                             var data = doc.data() as Map<String, dynamic>;
                             String name = data['full_name'] ?? 'No Name';

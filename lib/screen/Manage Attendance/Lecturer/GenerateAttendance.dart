@@ -42,7 +42,7 @@ class _GenerateAttendanceScreenState
     return ts.toString();
   }
 
-  String _generateCode() {
+  String generateAlphanumeric() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     final rand = Random();
     return String.fromCharCodes(Iterable.generate(
@@ -54,7 +54,7 @@ class _GenerateAttendanceScreenState
     String code;
     bool isUnique = false;
     do {
-      code = _generateCode();
+      code = generateAlphanumeric();
       final existing = await FirebaseFirestore.instance
           .collection('AttendanceSession')
           .where('attendance_code', isEqualTo: code)
@@ -66,19 +66,23 @@ class _GenerateAttendanceScreenState
     return code;
   }
 
-  Future<void> _generate() async {
+  /// SDD saveCodeToDatabase() — store the code and activate the session.
+  Future<void> saveCodeToDatabase(String code) async {
+    await FirebaseFirestore.instance
+        .collection('AttendanceSession')
+        .doc(widget.sessionId)
+        .update({
+      'attendance_code': code,
+      'session_status':  'Active',
+    });
+  }
+
+  /// SDD requestGenerateCode() — generate a unique code, save it, show it.
+  Future<void> requestGenerateCode() async {
     setState(() => _isGenerating = true);
     try {
       final code = await _generateUniqueCode();
-
-      // Update AttendanceSession with attendance_code and session_status
-      await FirebaseFirestore.instance
-          .collection('AttendanceSession')
-          .doc(widget.sessionId)
-          .update({
-        'attendance_code': code,
-        'session_status':  'Active',
-      });
+      await saveCodeToDatabase(code);
 
       if (mounted) {
         setState(() {
@@ -122,7 +126,7 @@ class _GenerateAttendanceScreenState
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
-        child: _confirmed ? _codeDisplay() : _confirmation(),
+        child: _confirmed ? displayCode() : _confirmation(),
       ),
     );
   }
@@ -189,7 +193,7 @@ class _GenerateAttendanceScreenState
           const SizedBox(width: 12),
           Expanded(
             child: ElevatedButton(
-              onPressed: _isGenerating ? null : _generate,
+              onPressed: _isGenerating ? null : requestGenerateCode,
               style: ElevatedButton.styleFrom(
                 backgroundColor: _blue,
                 foregroundColor: Colors.white,
@@ -212,7 +216,7 @@ class _GenerateAttendanceScreenState
     );
   }
 
-  Widget _codeDisplay() {
+  Widget displayCode() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -270,6 +274,12 @@ class _GenerateAttendanceScreenState
                   sessionId:          widget.sessionId,
                   sessionDescription: _desc,
                   subjectName:        widget.subjectName,
+                  subjectId:
+                      widget.sessionData['subject_id'] as String? ?? '',
+                  coqId:
+                      widget.sessionData['coq_id'] as String? ?? '',
+                  isCoQ:
+                      widget.sessionData['is_coq'] as bool? ?? false,
                 ),
               ),
             ),

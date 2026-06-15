@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 // Import fail login
@@ -27,8 +28,13 @@ void main() async {
   );
 
   // 3. Initialise Stripe with the publishable key.
-  Stripe.publishableKey = StripeConfig.publishableKey;
-  await Stripe.instance.applySettings();
+  // flutter_stripe has no web/desktop platform implementation; its
+  // MethodChannelStripe reads dart:io Platform.isIOS/isAndroid, which
+  // throws UnsupportedError on web and crashes main() before runApp().
+  if (!kIsWeb) {
+    Stripe.publishableKey = StripeConfig.publishableKey;
+    await Stripe.instance.applySettings();
+  }
 
   runApp(const MyApp());
 }

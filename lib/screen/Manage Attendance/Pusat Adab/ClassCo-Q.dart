@@ -24,9 +24,32 @@ class PusatAdabClassCoQScreen extends StatelessWidget {
         '${d.minute.toString().padLeft(2, '0')}';
   }
 
+  /// SDD fetchCoQModules() — live stream of attendance sessions for this Co-Q.
+  Stream<QuerySnapshot> fetchCoQModules() =>
+      AttendanceController.sessionsByCoQStream(coqId);
+
+  /// SDD onModuleSelected(coqID) — open the attendant list for the chosen
+  /// session of this Co-Q module.
+  void onModuleSelected(BuildContext context, String sessionId, String desc,
+      Timestamp? startTs, Timestamp? endTs) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PusatAdabListAttendanceScreen(
+          sessionId: sessionId,
+          sessionDescription: desc,
+          activityName: activityName,
+          coqId: coqId,
+          startTime: startTs,
+          endTime: endTs,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final query = AttendanceController.sessionsByCoQStream(coqId);
+    final query = fetchCoQModules();
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -48,23 +71,20 @@ class PusatAdabClassCoQScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              const Icon(Icons.people_outline, size: 40),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('View Attendance',
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.w500)),
-                    Text(activityName,
-                        style: const TextStyle(
-                            fontSize: 14, color: Colors.black54)),
-                  ],
-                ),
-              ),
+            Row(children: const [
+              Icon(Icons.people_outline, size: 32),
+              SizedBox(width: 10),
+              Text('View  Attendance',
+                  style:
+                      TextStyle(fontSize: 20, fontWeight: FontWeight.w500)),
             ]),
+            const SizedBox(height: 16),
+            Center(
+              child: Text(activityName,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w600)),
+            ),
             const SizedBox(height: 20),
             StreamBuilder<QuerySnapshot>(
               stream: query,
@@ -75,6 +95,13 @@ class PusatAdabClassCoQScreen extends StatelessWidget {
                 if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                   return _buildEmpty();
                 }
+                final docs = snapshot.data!.docs.toList()
+                  ..sort((a, b) {
+                    final ta = (a.data() as Map<String, dynamic>)['start_time'] as Timestamp?;
+                    final tb = (b.data() as Map<String, dynamic>)['start_time'] as Timestamp?;
+                    if (ta == null || tb == null) return 0;
+                    return ta.compareTo(tb);
+                  });
                 return Table(
                   border: TableBorder.all(
                       color: Colors.grey.shade400, width: 0.5),
@@ -86,7 +113,7 @@ class PusatAdabClassCoQScreen extends StatelessWidget {
                   },
                   children: [
                     _hdr(),
-                    ...snapshot.data!.docs.map((doc) {
+                    ...docs.map((doc) {
                       final d = doc.data() as Map<String, dynamic>;
                       return _row(context, doc.id, d);
                     }),
@@ -105,8 +132,8 @@ class PusatAdabClassCoQScreen extends StatelessWidget {
         children: [
           _Cell('Time & Date', isHeader: true),
           _Cell('Description', isHeader: true),
-          _Cell('Status', isHeader: true),
-          _Cell('Location', isHeader: true),
+          _Cell('Class Status', isHeader: true),
+          _Cell('Class Location', isHeader: true),
         ],
       );
 
@@ -114,27 +141,22 @@ class PusatAdabClassCoQScreen extends StatelessWidget {
       BuildContext context, String docId, Map<String, dynamic> data) {
     final status = data['session_status'] as String? ?? 'Pending';
     final startTs = data['start_time'] as Timestamp?;
+    final endTs   = data['end_time'] as Timestamp?;
     final desc    = data['session_description'] as String? ?? '-';
 
-    String location = 'UMPSA Campus';
-    final geo = data['session_location'];
-    if (geo is GeoPoint) {
-      location = '${geo.latitude.toStringAsFixed(4)},\n'
-          '${geo.longitude.toStringAsFixed(4)}';
+    final isOnline = data['is_online'] as bool? ?? false;
+    String location = 'Online';
+    if (!isOnline) {
+      final geo = data['session_location'];
+      location = geo is GeoPoint
+          ? '${geo.latitude.toStringAsFixed(4)},\n'
+              '${geo.longitude.toStringAsFixed(4)}'
+          : '-';
     }
 
     return TableRow(children: [
       GestureDetector(
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => PusatAdabListAttendanceScreen(
-              sessionId: docId,
-              sessionDescription: desc,
-              activityName: activityName,
-            ),
-          ),
-        ),
+        onTap: () => onModuleSelected(context, docId, desc, startTs, endTs),
         child: Container(
           color: const Color(0xFFFFF8F8),
           padding: const EdgeInsets.all(8),

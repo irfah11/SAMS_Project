@@ -2,19 +2,64 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../Controller/Manage Attendance/AttendanceController.dart';
 
-class ViewAttendanceScreen extends StatelessWidget {
+class ViewAttendanceScreen extends StatefulWidget {
   final String sessionId;
   final String sessionDescription;
   final String subjectName;
+  final String subjectId;
+  final String coqId;
+  final bool isCoQ;
+  final Timestamp? startTime;
+  final Timestamp? endTime;
 
   const ViewAttendanceScreen({
     super.key,
     required this.sessionId,
     required this.sessionDescription,
     required this.subjectName,
+    required this.subjectId,
+    this.coqId = '',
+    this.isCoQ = false,
+    this.startTime,
+    this.endTime,
   });
 
+  @override
+  State<ViewAttendanceScreen> createState() => _ViewAttendanceScreenState();
+}
+
+class _ViewAttendanceScreenState extends State<ViewAttendanceScreen> {
   static const _blue = Color(0xFF4C66EE);
+
+  String _search = '';
+
+  static const _weekdays = [
+    'Monday', 'Tuesday', 'Wednesday', 'Thursday',
+    'Friday', 'Saturday', 'Sunday'
+  ];
+  static const _months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ];
+
+  String _fmtHour(DateTime d) {
+    final h = d.hour % 12 == 0 ? 12 : d.hour % 12;
+    final ampm = d.hour < 12 ? 'AM' : 'PM';
+    if (d.minute == 0) return '$h$ampm';
+    return '$h:${d.minute.toString().padLeft(2, '0')}$ampm';
+  }
+
+  String _dateHeader() {
+    final start = widget.startTime?.toDate();
+    if (start == null) return widget.sessionDescription;
+    final dateStr =
+        '${_weekdays[start.weekday - 1]}, ${start.day} ${_months[start.month - 1]} ${start.year}';
+    final end = widget.endTime?.toDate();
+    final timeStr = end == null
+        ? _fmtHour(start)
+        : '${_fmtHour(start)} - ${_fmtHour(end)}';
+    return '$dateStr\n$timeStr';
+  }
 
   String _fmtTs(Timestamp? ts) {
     if (ts == null) return '-';
@@ -27,8 +72,6 @@ class ViewAttendanceScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final stream = AttendanceController.sessionRecordsStream(sessionId);
-
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -49,55 +92,95 @@ class ViewAttendanceScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              const Icon(Icons.group_outlined, size: 40, color: _blue),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('View Class Attendant',
-                          style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.w500)),
-                      Text('$subjectName — $sessionDescription',
-                          style: const TextStyle(
-                              fontSize: 13, color: Colors.black54)),
-                    ]),
-              ),
+            Row(children: const [
+              Icon(Icons.group_outlined, size: 32, color: _blue),
+              SizedBox(width: 10),
+              Text('View Class Attendant',
+                  style:
+                      TextStyle(fontSize: 20, fontWeight: FontWeight.w500)),
             ]),
-            const SizedBox(height: 20),
-            StreamBuilder<QuerySnapshot>(
-              stream: stream,
-              builder: (context, snap) {
-                if (snap.connectionState == ConnectionState.waiting) {
+            const SizedBox(height: 16),
+            Center(
+              child: Text(_dateHeader(),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w600)),
+            ),
+            const SizedBox(height: 16),
+            // Search bar
+            TextField(
+              onChanged: (v) => setState(() => _search = v.trim()),
+              decoration: InputDecoration(
+                hintText: 'Search Bar',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                isDense: true,
+                contentPadding:
+                    const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  borderSide: BorderSide(color: Colors.grey.shade400),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  borderSide: BorderSide(color: Colors.grey.shade400),
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text('Tap a row or status badge to update it.',
+                style: TextStyle(fontSize: 12, color: Colors.black38)),
+            const SizedBox(height: 16),
+            FutureBuilder<List<Map<String, dynamic>>>(
+              future: fetchStudentAttendance(),
+              builder: (context, rosterSnap) {
+                if (rosterSnap.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                if (!snap.hasData || snap.data!.docs.isEmpty) {
+                final roster = rosterSnap.data ?? [];
+                if (roster.isEmpty) {
                   return _buildEmpty();
                 }
-                final docs = snap.data!.docs;
-                return Column(children: [
-                  _buildStats(docs),
-                  const SizedBox(height: 16),
-                  Table(
-                    border: TableBorder.all(
-                        color: Colors.grey.shade400, width: 0.5),
-                    columnWidths: const {
-                      0: FlexColumnWidth(2.5),
-                      1: FlexColumnWidth(2),
-                      2: FlexColumnWidth(2.5),
-                      3: FlexColumnWidth(1.8),
-                      4: FlexColumnWidth(1.8),
-                    },
-                    children: [
-                      _hdr(),
-                      ...docs.map((doc) {
-                        final d = doc.data() as Map<String, dynamic>;
-                        return _row(context, doc.id, d);
-                      }),
-                    ],
-                  ),
-                ]);
+                return StreamBuilder<List<Map<String, dynamic>>>(
+                  stream: AttendanceController.sessionRosterStream(
+                      sessionId: widget.sessionId, roster: roster),
+                  builder: (context, snap) {
+                    if (snap.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    final all = (snap.data ?? List.from(roster))
+                      ..sort((a, b) => (a['full_name'] as String)
+                          .compareTo(b['full_name'] as String));
+                    final q = _search.toLowerCase();
+                    final entries = q.isEmpty
+                        ? all
+                        : all.where((e) {
+                            final name =
+                                (e['full_name'] as String? ?? '').toLowerCase();
+                            final id =
+                                (e['student_id'] as String? ?? '').toLowerCase();
+                            return name.contains(q) || id.contains(q);
+                          }).toList();
+                    return Column(children: [
+                      _buildStats(all),
+                      const SizedBox(height: 16),
+                      Table(
+                        border: TableBorder.all(
+                            color: Colors.grey.shade400, width: 0.5),
+                        columnWidths: const {
+                          0: FlexColumnWidth(2.2),
+                          1: FlexColumnWidth(2),
+                          2: FlexColumnWidth(2.8),
+                          3: FlexColumnWidth(1.8),
+                          4: FlexColumnWidth(2),
+                        },
+                        children: [
+                          _hdr(),
+                          ...entries.map((e) => _row(context, e)),
+                        ],
+                      ),
+                    ]);
+                  },
+                );
               },
             ),
           ],
@@ -106,11 +189,10 @@ class ViewAttendanceScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildStats(List<QueryDocumentSnapshot> docs) {
+  Widget _buildStats(List<Map<String, dynamic>> entries) {
     int p = 0, a = 0, l = 0;
-    for (final d in docs) {
-      final s =
-          (d.data() as Map<String, dynamic>)['status'] as String? ?? '';
+    for (final e in entries) {
+      final s = e['status'] as String? ?? 'Absent';
       if (s == 'Present') {
         p++;
       } else if (s == 'Late') {
@@ -126,7 +208,7 @@ class ViewAttendanceScreen extends StatelessWidget {
       const SizedBox(width: 8),
       _Chip('Absent', a, Colors.red.shade600),
       const Spacer(),
-      Text('Total: ${docs.length}',
+      Text('Total: ${entries.length}',
           style: const TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
@@ -137,46 +219,49 @@ class ViewAttendanceScreen extends StatelessWidget {
   TableRow _hdr() => const TableRow(
         decoration: BoxDecoration(color: Color(0xFFE8EAFF)),
         children: [
-          _HCell('Full Name'),
+          _HCell('Time & Date'),
           _HCell('Matric ID'),
-          _HCell('Check-in Time'),
+          _HCell('Full Name'),
           _HCell('Status'),
           _HCell('Location'),
         ],
       );
 
-  TableRow _row(
-      BuildContext context, String recordId, Map<String, dynamic> data) {
-    final status   = data['status'] as String? ?? 'Absent';
-    final name     = data['student_name'] as String? ??
-                     data['Student_id'] as String? ?? '-';
-    final matricId = data['Student_id'] as String? ?? '-';
-    final ts       = data['check_in_time'] as Timestamp?;
+  TableRow _row(BuildContext context, Map<String, dynamic> entry) {
+    final status   = entry['status'] as String? ?? 'Absent';
+    final name     = entry['full_name'] as String? ?? '-';
+    final matricId = entry['student_id'] as String? ?? '-';
+    final ts       = entry['check_in_time'] as Timestamp?;
+    final recordId = entry['record_id'] as String?;
 
     String location = '-';
-    final geo = data['record_location'];
+    final geo = entry['record_location'];
     if (geo is GeoPoint) {
       location = '${geo.latitude.toStringAsFixed(3)},\n'
                  '${geo.longitude.toStringAsFixed(3)}';
     }
 
     return TableRow(children: [
+      _DCell(_fmtTs(ts)),
+      _DCell(matricId),
       GestureDetector(
-        onTap: () => _showEditDialog(context, recordId, status, name),
+        onTap: () =>
+            editStudentStatus(context, recordId, matricId, status, name),
         child: Container(
           color: const Color(0xFFF8F9FF),
           padding: const EdgeInsets.all(8),
-          child: Text(name, style: const TextStyle(fontSize: 11)),
+          child: Text(name,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 11)),
         ),
       ),
-      _DCell(matricId),
-      _DCell(_fmtTs(ts)),
       TableCell(
         verticalAlignment: TableCellVerticalAlignment.middle,
         child: Padding(
           padding: const EdgeInsets.all(6),
           child: GestureDetector(
-            onTap: () => _showEditDialog(context, recordId, status, name),
+            onTap: () =>
+                editStudentStatus(context, recordId, matricId, status, name),
             child: Container(
               padding: const EdgeInsets.symmetric(
                   horizontal: 6, vertical: 4),
@@ -198,9 +283,35 @@ class ViewAttendanceScreen extends StatelessWidget {
     ]);
   }
 
-  // editStudentStatus — opens dialog for lecturer to override attendance status
-  void _showEditDialog(BuildContext context, String recordId,
-      String currentStatus, String studentName) {
+  /// SDD fetchStudentAttendance() — roster of students for this subject or
+  /// Co-Q module (Co-Q sessions have no subject_id).
+  Future<List<Map<String, dynamic>>> fetchStudentAttendance() =>
+      widget.isCoQ
+          ? AttendanceController.fetchCoQRoster(widget.coqId)
+          : AttendanceController.fetchSubjectRoster(widget.subjectId);
+
+  /// SDD updateAttendanceRecord() — persist a student's new status.
+  Future<void> updateAttendanceRecord(String? recordId, String studentId,
+      String studentName, String newStatus) {
+    return AttendanceController.setRecordStatus(
+      recordId:    recordId,
+      sessionId:   widget.sessionId,
+      studentId:   studentId,
+      studentName: studentName,
+      newStatus:   newStatus,
+    );
+  }
+
+  /// SDD refreshList() — rebuild the attendant table.
+  void refreshList() {
+    if (mounted) setState(() {});
+  }
+
+  // SDD editStudentStatus(studentID) — opens dialog for lecturer to override
+  // attendance status. recordId is null when the student has no
+  // AttendanceRecord yet (never checked in); saving creates a new record.
+  void editStudentStatus(BuildContext context, String? recordId,
+      String studentId, String currentStatus, String studentName) {
     String selected = currentStatus;
     showDialog(
       context: context,
@@ -229,13 +340,15 @@ class ViewAttendanceScreen extends StatelessWidget {
             ElevatedButton(
               onPressed: () async {
                 Navigator.pop(ctx);
-                await AttendanceController.updateRecordStatus(recordId, selected);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                await updateAttendanceRecord(
+                    recordId, studentId, studentName, selected);
+                if (mounted) {
+                  ScaffoldMessenger.of(this.context).showSnackBar(SnackBar(
                     content: Text(
                         'Status updated to "$selected" for $studentName'),
                     backgroundColor: Colors.green,
                   ));
+                  refreshList();
                 }
               },
               style: ElevatedButton.styleFrom(
@@ -262,12 +375,8 @@ class ViewAttendanceScreen extends StatelessWidget {
           child: Column(children: [
             Icon(Icons.people_outline, size: 60, color: Colors.black26),
             SizedBox(height: 14),
-            Text('No students have checked in yet.',
+            Text('No students registered for this subject yet.',
                 style: TextStyle(fontSize: 14, color: Colors.black54)),
-            SizedBox(height: 6),
-            Text('Records appear once students submit the class code.',
-                style: TextStyle(fontSize: 12, color: Colors.black38),
-                textAlign: TextAlign.center),
           ]),
         ),
       );

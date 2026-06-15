@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../Controller/Manage Attendance/AttendanceController.dart';
+import '../../../widgets/card_image.dart';
 import 'ListClass.dart';
 
 class StudentCoQSubjectScreen extends StatefulWidget {
@@ -73,53 +74,53 @@ class _StudentCoQSubjectScreenState extends State<StudentCoQSubjectScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(children: const [
-                    Icon(Icons.people_outline, size: 48),
-                    SizedBox(width: 12),
-                    Text('Manage Attendance',
+                    Icon(Icons.people_outline, size: 32),
+                    SizedBox(width: 10),
+                    Text('Manage  Attendance',
                         style: TextStyle(
-                            fontSize: 22, fontWeight: FontWeight.w500)),
+                            fontSize: 20, fontWeight: FontWeight.w500)),
                   ]),
-                  const SizedBox(height: 6),
-                  Text(
-                    _studentId != null
-                        ? 'Student ID: $_studentId'
-                        : 'No student ID found in your profile',
-                    style: const TextStyle(
-                        fontSize: 13, color: Colors.black54),
-                  ),
                   const SizedBox(height: 24),
                   if (_subjects.isEmpty)
                     _buildEmptyState()
                   else
-                    ..._subjects.map(_buildCard),
+                    ..._subjects.map(displayModule),
                 ],
               ),
             ),
     );
   }
 
-  Widget _buildCard(Map<String, dynamic> s) {
+  /// SDD selectModule() — open the class list for the chosen subject/module.
+  void selectModule(Map<String, dynamic> s) {
     final isCoQ = s['isCoQ'] as bool;
-    return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => StudentListClassScreen(
-            subjectId:   isCoQ ? null : s['id'] as String,
-            coqId:       isCoQ ? s['id'] as String : null,
-            subjectName: s['name'] as String,
-            studentId:   _studentId,
-          ),
+    final code  = (s['id'] as String?) ?? '';
+    final name  = (s['name'] as String?) ?? '';
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => StudentListClassScreen(
+          subjectId:   isCoQ ? null : s['id'] as String,
+          coqId:       isCoQ ? s['id'] as String : null,
+          subjectName: code.isEmpty ? name : '$code : $name',
+          studentId:   _studentId,
         ),
       ),
+    );
+  }
+
+  /// SDD displayModule() — build a tappable card for one subject/module.
+  Widget displayModule(Map<String, dynamic> s) {
+    final code  = (s['id'] as String?) ?? '';
+    final name  = (s['name'] as String?) ?? '';
+    return GestureDetector(
+      onTap: () => selectModule(s),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 14),
-        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.only(bottom: 20),
         decoration: BoxDecoration(
-          color: isCoQ
-              ? const Color(0xFFB2EBF2)
-              : const Color(0xFF5CE1E6),
+          color: Colors.white,
           borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.grey.shade300),
           boxShadow: [
             BoxShadow(
                 color: Colors.black.withAlpha(18),
@@ -127,33 +128,29 @@ class _StudentCoQSubjectScreenState extends State<StudentCoQSubjectScreen> {
                 offset: const Offset(0, 3))
           ],
         ),
-        child: Row(children: [
-          Icon(
-              isCoQ ? Icons.military_tech_outlined : Icons.book_outlined,
-              size: 36,
-              color: Colors.black87),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(s['name'] as String,
-                    style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87)),
-                const SizedBox(height: 4),
-                Text(
-                    isCoQ
-                        ? 'Co-Curriculum Activity'
-                        : 'Academic Subject',
-                    style: const TextStyle(
-                        fontSize: 12, color: Colors.black54)),
-              ],
+        child: Column(
+          children: [
+            const CardImageBanner(),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              child: Column(
+                children: [
+                  Text(code,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87)),
+                  const SizedBox(height: 4),
+                  Text(name.toUpperCase(),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          fontSize: 13, color: Colors.black54)),
+                ],
+              ),
             ),
-          ),
-          const Icon(Icons.chevron_right, color: Colors.black54),
-        ]),
+          ],
+        ),
       ),
     );
   }

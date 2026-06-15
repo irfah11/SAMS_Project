@@ -197,4 +197,54 @@ class RegistrationController {
       }
     }
   }
+
+  // ============================================
+  // --- FUNGSI CO-Q REGISTRATION (STUDENT) ---
+  // ============================================
+
+  // Tempah/daftar aktiviti Co-Q
+  Future<void> registerForCoQ(String studentId, ModuleCoQ coq) async {
+    final existing = await _db
+        .collection('module_coq_registrations')
+        .where('student_id', isEqualTo: studentId)
+        .where('coq_id', isEqualTo: coq.coqId)
+        .where('status', isEqualTo: 'Active')
+        .get();
+
+    if (existing.docs.isNotEmpty) {
+      throw Exception('You have already booked this Co-Q activity.');
+    }
+
+    await _db.collection('module_coq_registrations').add({
+      'student_id': studentId,
+      'coq_id': coq.coqId,
+      'activity_name': coq.activityName,
+      'location': coq.location,
+      'lecturer_name': coq.lecturerName,
+      'status': 'Active',
+    });
+  }
+
+  // Senarai pendaftaran Co-Q aktif bagi seorang pelajar (real-time)
+  Stream<List<Map<String, dynamic>>> studentCoQRegistrationsStream(
+    String studentId,
+  ) {
+    return _db
+        .collection('module_coq_registrations')
+        .where('student_id', isEqualTo: studentId)
+        .where('status', isEqualTo: 'Active')
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs.map((doc) {
+            final data = doc.data();
+            data['reg_id'] = doc.id;
+            return data;
+          }).toList();
+        });
+  }
+
+  // Gugurkan pendaftaran Co-Q (Drop)
+  Future<void> dropCoQRegistration(String regId) async {
+    await _db.collection('module_coq_registrations').doc(regId).delete();
+  }
 }

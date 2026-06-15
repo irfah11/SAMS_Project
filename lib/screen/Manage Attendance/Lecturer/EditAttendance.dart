@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:geolocator/geolocator.dart';
 
 class EditAttendanceScreen extends StatefulWidget {
   final String sessionId;
@@ -25,9 +26,18 @@ class _EditAttendanceScreenState extends State<EditAttendanceScreen> {
   late TextEditingController _radiusController;
   bool _isSaving = false;
 
+  bool _isOnline = false;
+  GeoPoint? _sessionLocation;
+  bool _isCapturingLocation = false;
+
   @override
   void initState() {
     super.initState();
+    loadSessionData();
+  }
+
+  /// SDD loadSessionData() — pre-fill the form from the existing session.
+  void loadSessionData() {
     final data = widget.sessionData;
 
     // start_time and end_time are Timestamps
@@ -45,6 +55,8 @@ class _EditAttendanceScreenState extends State<EditAttendanceScreen> {
         text: data['session_description'] as String? ?? '');
     _radiusController = TextEditingController(
         text: (data['radius_meters'] as int? ?? 100).toString());
+    _isOnline = data['is_online'] as bool? ?? false;
+    _sessionLocation = data['session_location'] as GeoPoint?;
   }
 
   @override
@@ -92,18 +104,74 @@ class _EditAttendanceScreenState extends State<EditAttendanceScreen> {
     }
   }
 
-  Future<void> _save() async {
+  Future<void> _captureLocation() async {
+    setState(() => _isCapturingLocation = true);
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        throw 'Location services are disabled. Please enable GPS.';
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        throw 'Location permission denied.';
+      }
+
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings:
+            const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+
+      if (mounted) {
+        setState(() {
+          _sessionLocation = GeoPoint(pos.latitude, pos.longitude);
+          _isCapturingLocation = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isCapturingLocation = false);
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
+  }
+
+  /// SDD inputModifiedDetails() — validate the edited form values.
+  bool inputModifiedDetails() {
     if (_descController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Description cannot be empty.')));
-      return;
+      displayStatus('Description cannot be empty.', success: false);
+      return false;
     }
     if (!_isStartBeforeEnd()) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('End time must be after start time.'),
-          backgroundColor: Colors.red));
-      return;
+      displayStatus('End time must be after start time.', success: false);
+      return false;
     }
+    if (!_isOnline && _sessionLocation == null) {
+      displayStatus(
+          'Please capture the class location, or mark it as an online class.',
+          success: false);
+      return false;
+    }
+    return true;
+  }
+
+  /// SDD displayStatus(msg) — show a status message to the lecturer.
+  void displayStatus(String msg, {bool success = true}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: success ? Colors.green : Colors.red,
+    ));
+  }
+
+  /// SDD updateSession() — validate then persist the edited session.
+  Future<void> updateSession() async {
+    if (!inputModifiedDetails()) return;
 
     setState(() => _isSaving = true);
     try {
@@ -117,20 +185,44 @@ class _EditAttendanceScreenState extends State<EditAttendanceScreen> {
         'session_description': _descController.text.trim(),
         'radius_meters':
             int.tryParse(_radiusController.text.trim()) ?? 100,
+        'is_online':           _isOnline,
+        'session_location':    _isOnline ? null : _sessionLocation,
       });
 
       if (mounted) {
         setState(() => _isSaving = false);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Session updated successfully!'),
-            backgroundColor: Colors.green));
-        Navigator.pop(context);
+        // Figure 3.5.69 — edit class successful dialog, then back to the list.
+        await showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
+            content: Column(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.check_circle_outline,
+                  size: 64, color: Colors.green.shade600),
+              const SizedBox(height: 16),
+              const Text('Attendance Class Edited',
+                  textAlign: TextAlign.center,
+                  style:
+                      TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              const Text('You had successfully Edit Attendance.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 14, color: Colors.black54)),
+            ]),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('OK')),
+            ],
+          ),
+        );
+        if (mounted) Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isSaving = false);
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error: $e')));
+        displayStatus('Error: $e', success: false);
       }
     }
   }
@@ -206,14 +298,68 @@ class _EditAttendanceScreenState extends State<EditAttendanceScreen> {
             ),
             const SizedBox(height: 16),
 
-            _lbl('Check-in Radius (metres)'),
-            const SizedBox(height: 6),
-            TextField(
-              controller: _radiusController,
-              keyboardType: TextInputType.number,
-              decoration: _deco('Radius', Icons.radar_outlined),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade400),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _isOnline,
+                onChanged: (v) => setState(() => _isOnline = v),
+                title: const Text('Online Class',
+                    style: TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w600)),
+                subtitle: const Text(
+                    'No location check required for check-in',
+                    style: TextStyle(fontSize: 12, color: Colors.black54)),
+              ),
             ),
-            const SizedBox(height: 36),
+            const SizedBox(height: 16),
+
+            if (!_isOnline) ...[
+              _lbl('Check-in Radius (metres)'),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _radiusController,
+                keyboardType: TextInputType.number,
+                decoration: _deco('Radius', Icons.radar_outlined),
+              ),
+              const SizedBox(height: 16),
+
+              _lbl('Class Location'),
+              const SizedBox(height: 6),
+              Row(children: [
+                Expanded(
+                  child: Text(
+                    _sessionLocation != null
+                        ? '${_sessionLocation!.latitude.toStringAsFixed(5)}, '
+                            '${_sessionLocation!.longitude.toStringAsFixed(5)}'
+                        : 'Not set — tap to capture your current location',
+                    style: TextStyle(
+                        fontSize: 13,
+                        color: _sessionLocation != null
+                            ? Colors.black87
+                            : Colors.grey),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed:
+                      _isCapturingLocation ? null : _captureLocation,
+                  icon: _isCapturingLocation
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.my_location),
+                  label:
+                      Text(_sessionLocation != null ? 'Update' : 'Capture'),
+                ),
+              ]),
+              const SizedBox(height: 8),
+            ],
+            const SizedBox(height: 28),
 
             Row(children: [
               Expanded(
@@ -230,7 +376,7 @@ class _EditAttendanceScreenState extends State<EditAttendanceScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton(
-                  onPressed: _isSaving ? null : _save,
+                  onPressed: _isSaving ? null : updateSession,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _blue,
                     foregroundColor: Colors.white,

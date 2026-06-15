@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:geolocator/geolocator.dart';
 
 // =============================================================
 // CONTROLLER — AttendanceController
@@ -20,12 +21,13 @@ class AttendanceController {
   // SHARED
   // ================================================================
 
-  /// Live stream of AttendanceRecord docs for a session, ordered by name.
+  /// Live stream of AttendanceRecord docs for a session.
+  /// Not ordered server-side (would require a composite index) — callers
+  /// should sort by student_name client-side.
   static Stream<QuerySnapshot> sessionRecordsStream(String sessionId) {
     return _db
         .collection(_recordsCol)
         .where('session_id', isEqualTo: sessionId)
-        .orderBy('student_name')
         .snapshots();
   }
 
@@ -39,31 +41,215 @@ class AttendanceController {
   }
 
   // ================================================================
+  // SDD class-diagram methods (thin wrappers over the logic above so the
+  // implementation matches the design document method names).
+  // ================================================================
+
+  /// SDD getAttendanceList(sessionID) — all AttendanceRecords for a session.
+  static Future<List<Map<String, dynamic>>> getAttendanceList(
+      String sessionId) async {
+    final snap = await _db
+        .collection(_recordsCol)
+        .where('session_id', isEqualTo: sessionId)
+        .get();
+    return snap.docs.map((d) {
+      return {...d.data(), 'record_id': d.id};
+    }).toList();
+  }
+
+  /// SDD updateAttendanceStatus(studentID, sessionID, newStatus) — set a
+  /// student's status for a session, creating the record if none exists.
+  static Future<void> updateAttendanceStatus(
+      String studentId, String sessionId, String newStatus) async {
+    final existing = await _db
+        .collection(_recordsCol)
+        .where('session_id', isEqualTo: sessionId)
+        .where('Student_id', isEqualTo: studentId)
+        .limit(1)
+        .get();
+    if (existing.docs.isNotEmpty) {
+      await existing.docs.first.reference.update({'status': newStatus});
+    } else {
+      await _db.collection(_recordsCol).add({
+        'session_id': sessionId,
+        'Student_id': studentId,
+        'status': newStatus,
+        'check_in_time': null,
+      });
+    }
+  }
+
+  /// SDD calculateDistance(lat1, lon1, lat2, lon2) — distance in metres.
+  static double calculateDistance(
+          double lat1, double lon1, double lat2, double lon2) =>
+      Geolocator.distanceBetween(lat1, lon1, lat2, lon2);
+
+  /// SDD validateCheckIn(studentID, inputCode, sLat, sLong) — validates the
+  /// code + location and records attendance. Delegates to [checkIn].
+  static Future<CheckInResult> validateCheckIn(
+    String studentId,
+    String inputCode,
+    double? sLat,
+    double? sLong, {
+    required String sessionId,
+    required String studentName,
+  }) {
+    return checkIn(
+      sessionId: sessionId,
+      studentId: studentId,
+      studentName: studentName,
+      enteredCode: inputCode,
+      studentLat: sLat,
+      studentLong: sLong,
+    );
+  }
+
+  /// Set the attendance status for a roster entry. If [recordId] is null
+  /// (the student has no AttendanceRecord yet, i.e. they never checked in),
+  /// a new record is created instead of updating an existing one.
+  static Future<void> setRecordStatus({
+    required String? recordId,
+    required String sessionId,
+    required String studentId,
+    required String studentName,
+    required String newStatus,
+  }) async {
+    if (recordId != null) {
+      await updateRecordStatus(recordId, newStatus);
+    } else {
+      await _db.collection(_recordsCol).add({
+        'session_id':    sessionId,
+        'Student_id':    studentId,
+        'student_name':  studentName,
+        'status':        newStatus,
+        'check_in_time': null,
+      });
+    }
+  }
+
+  /// All students registered (status 'Approved') for a subject, with their
+  /// full names. Used to build the full class roster for "View Attendance".
+  static Future<List<Map<String, dynamic>>> fetchSubjectRoster(
+      String subjectId) async {
+    final snap = await _db
+        .collection('course_registrations')
+        .where('subject_id', isEqualTo: subjectId)
+        .where('status', isEqualTo: 'Approved')
+        .get();
+
+    return snap.docs.map((doc) {
+      final d = doc.data();
+      return {
+        'student_id': d['student_id']?.toString() ?? '',
+        'full_name':  (d['full_name'] ?? 'Unknown').toString(),
+      };
+    }).toList();
+  }
+
+  /// All students registered (status 'Active') for a Co-Q module, with their
+  /// full names looked up from the `student` collection. Used to build the
+  /// full roster for Pusat Adab's "View Attendance".
+  static Future<List<Map<String, dynamic>>> fetchCoQRoster(
+      String coqId) async {
+    final regSnap = await _db
+        .collection('module_coq_registrations')
+        .where('coq_id', isEqualTo: coqId)
+        .where('status', isEqualTo: 'Active')
+        .get();
+
+    final studentIds = regSnap.docs
+        .map((doc) => doc.data()['student_id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toList();
+
+    final names = <String, String>{};
+    for (var i = 0; i < studentIds.length; i += 30) {
+      final chunk = studentIds.sublist(i, min(i + 30, studentIds.length));
+      final stuSnap = await _db
+          .collection('student')
+          .where('student_id', whereIn: chunk)
+          .get();
+      for (final doc in stuSnap.docs) {
+        final d = doc.data();
+        names[d['student_id']?.toString() ?? ''] =
+            (d['full_name'] ?? 'Unknown').toString();
+      }
+    }
+
+    return studentIds
+        .map((id) => {'student_id': id, 'full_name': names[id] ?? id})
+        .toList();
+  }
+
+  /// Merges a class/Co-Q [roster] with the live AttendanceRecord stream for
+  /// [sessionId]. Roster entries with no matching record are reported as
+  /// 'Absent' with a null record_id (so the UI can create a record on edit).
+  static Stream<List<Map<String, dynamic>>> sessionRosterStream({
+    required String sessionId,
+    required List<Map<String, dynamic>> roster,
+  }) {
+    return sessionRecordsStream(sessionId).map((snap) {
+      final records = <String, QueryDocumentSnapshot>{};
+      for (final doc in snap.docs) {
+        final sid =
+            (doc.data() as Map<String, dynamic>)['Student_id']?.toString() ??
+                '';
+        records[sid] = doc;
+      }
+
+      return roster.map((entry) {
+        final sid = entry['student_id'] as String;
+        final record = records[sid];
+        if (record != null) {
+          final d = record.data() as Map<String, dynamic>;
+          return {
+            'student_id':      sid,
+            'full_name':       entry['full_name'],
+            'status':          d['status'] ?? 'Present',
+            'check_in_time':   d['check_in_time'],
+            'record_location': d['record_location'],
+            'record_id':       record.id,
+          };
+        }
+        return {
+          'student_id':      sid,
+          'full_name':       entry['full_name'],
+          'status':          'Absent',
+          'check_in_time':   null,
+          'record_location': null,
+          'record_id':       null,
+        };
+      }).toList();
+    });
+  }
+
+  // ================================================================
   // LECTURER
   // ================================================================
 
   /// Load the subjects and CoQ modules assigned to this lecturer.
-  /// [lecturerId] is the numeric ID for course_subjects.
-  /// [lecturerName] is the display name for module_coq (no Lecturer_id field there).
+  /// [lecturerId] is the numeric ID (kept for API compatibility, currently unused).
+  /// [lecturerName] is the display name used by both course_subjects.lecturer_name
+  /// and module_coq.lecturer_name (neither collection has a Lecturer_id field).
   /// Returns a list of maps with keys: id, name, isCoQ.
   static Future<List<Map<String, dynamic>>> fetchLecturerClasses(
       dynamic lecturerId, {String lecturerName = ''}) async {
     final list = <Map<String, dynamic>>[];
 
-    final subSnap = await _db
-        .collection('course_subjects')
-        .where('Lecturer_id', isEqualTo: lecturerId)
-        .get();
-    for (final doc in subSnap.docs) {
-      final d = doc.data();
-      list.add({
-        'id':    d['subject_id'] ?? doc.id,
-        'name':  d['subject_name'] ?? 'Unknown Subject',
-        'isCoQ': false,
-      });
-    }
-
     if (lecturerName.isNotEmpty) {
+      final subSnap = await _db
+          .collection('course_subjects')
+          .where('lecturer_name', isEqualTo: lecturerName)
+          .get();
+      for (final doc in subSnap.docs) {
+        final d = doc.data();
+        list.add({
+          'id':    d['subject_id'] ?? doc.id,
+          'name':  d['subject_name'] ?? 'Unknown Subject',
+          'isCoQ': false,
+        });
+      }
+
       final coqSnap = await _db
           .collection('module_coq')
           .where('lecturer_name', isEqualTo: lecturerName)
@@ -82,7 +268,8 @@ class AttendanceController {
   }
 
   /// Live stream of AttendanceSessions for a lecturer, optionally filtered
-  /// by subjectId or coqId, ordered by start_time ascending.
+  /// by subjectId or coqId. Not ordered server-side (would require a
+  /// composite index) — callers should sort by start_time client-side.
   static Stream<QuerySnapshot> lecturerSessionsStream({
     required dynamic lecturerId,
     String? subjectId,
@@ -90,8 +277,7 @@ class AttendanceController {
   }) {
     Query q = _db
         .collection(_sessionsCol)
-        .where('Lecturer_id', isEqualTo: lecturerId)
-        .orderBy('start_time');
+        .where('Lecturer_id', isEqualTo: lecturerId);
 
     if (subjectId != null) {
       q = q.where('subject_id', isEqualTo: subjectId);
@@ -276,15 +462,15 @@ class AttendanceController {
     return list;
   }
 
-  /// Live stream of AttendanceSessions for a subject or CoQ, ordered by
-  /// start_time. Intended for the student "List Class" screen.
+  /// Live stream of AttendanceSessions for a subject or CoQ. Intended for
+  /// the student "List Class" screen. Not ordered server-side (would
+  /// require a composite index) — callers should sort by start_time
+  /// client-side.
   static Stream<QuerySnapshot> studentSessionsStream({
     String? subjectId,
     String? coqId,
   }) {
-    Query q = _db
-        .collection(_sessionsCol)
-        .orderBy('start_time');
+    Query q = _db.collection(_sessionsCol);
 
     if (subjectId != null) {
       q = q.where('subject_id', isEqualTo: subjectId);
@@ -296,13 +482,18 @@ class AttendanceController {
   }
 
   /// Submit a check-in for a student.
-  /// Validates that the session is Active and the entered code is correct,
-  /// then upserts an AttendanceRecord (one per student per session).
+  /// Validates that the session is Active, the entered code is correct, and
+  /// — unless the session is online or has no location set — that the
+  /// student's detected GPS position is within [radius_meters] of the
+  /// session's location, then upserts an AttendanceRecord (one per student
+  /// per session).
   static Future<CheckInResult> checkIn({
     required String sessionId,
     required String studentId,
     required String studentName,
     required String enteredCode,
+    double? studentLat,
+    double? studentLong,
   }) async {
     final sessionDoc =
         await _db.collection(_sessionsCol).doc(sessionId).get();
@@ -326,10 +517,33 @@ class AttendanceController {
       return const CheckInResult(
           success: false,
           message:
-              'Attendance Check-In Failed.\nYou had enter the wrong code for Check-In your attendance.');
+              'You had enter the wrong code for Check-In your attendance.');
     }
 
-    const GeoPoint studentLoc = GeoPoint(3.5568, 103.4268);
+    final isOnline = data['is_online'] as bool? ?? false;
+    final sessionLoc = data['session_location'] as GeoPoint?;
+    final radiusMeters = (data['radius_meters'] as num?)?.toDouble() ?? 100;
+
+    if (!isOnline &&
+        sessionLoc != null &&
+        studentLat != null &&
+        studentLong != null) {
+      final distance = calculateDistance(
+        studentLat,
+        studentLong,
+        sessionLoc.latitude,
+        sessionLoc.longitude,
+      );
+      if (distance > radiusMeters) {
+        return const CheckInResult(
+            success: false,
+            message: 'Your location for Check-In is out of range.');
+      }
+    }
+
+    final studentLoc = (studentLat != null && studentLong != null)
+        ? GeoPoint(studentLat, studentLong)
+        : null;
 
     final existing = await _db
         .collection(_recordsCol)
@@ -345,19 +559,20 @@ class AttendanceController {
         'student_name':    studentName,
         'check_in_time':   Timestamp.now(),
         'status':          'Present',
-        'record_location': studentLoc,
+        'record_location': ?studentLoc,
       });
     } else {
       await existing.docs.first.reference.update({
         'status':        'Present',
         'check_in_time': Timestamp.now(),
+        'record_location': ?studentLoc,
       });
     }
 
     return const CheckInResult(
         success: true,
         message:
-            'Attendance Check-In Successful!\nYou have been marked as Present.');
+            'You had successfully Check-In your attendance.');
   }
 
   // ================================================================
@@ -372,13 +587,13 @@ class AttendanceController {
         .snapshots();
   }
 
-  /// Live stream of AttendanceSessions for a Co-Q module, ordered by
-  /// start_time ascending.
+  /// Live stream of AttendanceSessions for a Co-Q module. Not ordered
+  /// server-side (would require a composite index) — callers should sort
+  /// by start_time client-side.
   static Stream<QuerySnapshot> sessionsByCoQStream(String coqId) {
     return _db
         .collection(_sessionsCol)
         .where('coq_id', isEqualTo: coqId)
-        .orderBy('start_time')
         .snapshots();
   }
 }
