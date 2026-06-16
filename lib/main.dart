@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter_stripe/flutter_stripe.dart';
 // Import fail login
 
 import 'package:sams/auth/login_screen.dart';
-import 'package:sams/config/stripe_config.dart';
 // Import firebase_options yang kita dah jana tadi
 
 // FIX: Buang 'dynamic DefaultFirebaseOptions' dari dalam kurungan main()
@@ -26,15 +23,6 @@ void main() async {
           'sams-7a359.firebasestorage.app', // Ini ID projek awak berdasarkan gambar tadi
     ),
   );
-
-  // 3. Initialise Stripe with the publishable key.
-  // flutter_stripe has no web/desktop platform implementation; its
-  // MethodChannelStripe reads dart:io Platform.isIOS/isAndroid, which
-  // throws UnsupportedError on web and crashes main() before runApp().
-  if (!kIsWeb) {
-    Stripe.publishableKey = StripeConfig.publishableKey;
-    await Stripe.instance.applySettings();
-  }
 
   runApp(const MyApp());
 }

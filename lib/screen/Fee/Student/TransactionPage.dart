@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sams/Domain/transaction.dart';
 import 'package:sams/Controller/Fee/FeeController.dart';
+import 'package:sams/screen/Manage_Menu/student_menu.dart';
 
 import 'FeePage.dart'; // for SamsHeader, SectionTitle, formatDate, formatMoney
 import 'TransactionDetailsPage.dart';
@@ -23,10 +24,25 @@ class _TransactionPageState extends State<TransactionPage> {
   @override
   void initState() {
     super.initState();
-    _future = FeeController.fetchTransactions(widget.studentId);
+    _future = getHistory();
   }
 
-  void navigateToTransactionDetails(Transaction tx) {
+  // getHistory() — SDD-REQ-303: load this student's transaction history.
+  Future<List<Transaction>> getHistory() =>
+      FeeController.getTransactionHistory(widget.studentId);
+
+  // Group transactions by academic year for display (presentation helper).
+  List<MapEntry<String, List<Transaction>>> _groupByYear(
+    List<Transaction> txs,
+  ) {
+    final map = <String, List<Transaction>>{};
+    for (final t in txs) {
+      map.putIfAbsent(t.academicYear, () => []).add(t);
+    }
+    return map.entries.toList();
+  }
+
+  void navigateToDetails(Transaction tx) {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => TransactionDetailsPage(transaction: tx),
@@ -38,6 +54,8 @@ class _TransactionPageState extends State<TransactionPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+      // Drawer so the header's menu icon opens the student navigation here.
+      drawer: StudentDrawer(studentId: widget.studentId),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -65,8 +83,7 @@ class _TransactionPageState extends State<TransactionPage> {
                     );
                   }
 
-                  final grouped =
-                      FeeController.groupByYear(txs);
+                  final grouped = _groupByYear(txs);
 
                   return SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
@@ -97,7 +114,7 @@ class _TransactionPageState extends State<TransactionPage> {
                           for (final tx in group.value)
                             _TransactionTile(
                               tx: tx,
-                              onTap: () => navigateToTransactionDetails(tx),
+                              onTap: () => navigateToDetails(tx),
                             ),
                           const SizedBox(height: 16),
                         ],

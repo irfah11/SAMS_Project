@@ -1,114 +1,13 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:moon_design/moon_design.dart';
 
+import 'package:sams/Controller/Fee/FeeController.dart';
 import 'package:sams/screen/Fee/Student/FeePage.dart' show SamsHeader;
+import 'package:sams/screen/Manage_Menu/treasury_menu.dart';
 
 import 'StudentRecordPage.dart';
 import 'OverdueStudent_Page.dart';
 
 const Color kTreasuryGreen = Color(0xFF52DE76);
-
-// =============================================================
-// MODELS
-// =============================================================
-class DashboardStats {
-  final int totalStudents;
-  final int paidStudents;
-  final int unpaidStudents;
-  final int overdueStudents;
-
-  const DashboardStats({
-    required this.totalStudents,
-    required this.paidStudents,
-    required this.unpaidStudents,
-    required this.overdueStudents,
-  });
-}
-
-class StudentRow {
-  final String studentId;
-  final String fullName;
-  final String paymentStatus;
-
-  const StudentRow({
-    required this.studentId,
-    required this.fullName,
-    required this.paymentStatus,
-  });
-}
-
-// =============================================================
-// CONTROLLER METHODS — FeeController (treasury side)
-// Per SDD-REQ-308: getDashboardStats()
-// =============================================================
-class TreasuryController {
-  /// Fetches stats + student list in one pass over the fees collection.
-  /// For very large datasets (>10K students), prefer aggregation queries.
-  static Future<({DashboardStats stats, List<StudentRow> students})>
-      getDashboardStats() async {
-    final db = FirebaseFirestore.instance;
-
-    // Pull all fee records (each represents one student-semester).
-    final feeSnap = await db.collection('Fee').get();
-
-    int paid = 0, unpaid = 0, overdue = 0;
-    final rows = <StudentRow>[];
-
-    for (final doc in feeSnap.docs) {
-      final data = doc.data();
-      final status = (data['payment_status'] ?? 'Unpaid').toString();
-
-      switch (status.toLowerCase()) {
-        case 'paid':
-          paid++;
-          break;
-        case 'overdue':
-          overdue++;
-          unpaid++; // overdue counts as unpaid for the summary tile
-          break;
-        default:
-          unpaid++;
-      }
-
-      rows.add(StudentRow(
-        studentId: (data['student_id'] ?? '').toString(),
-        fullName: (data['student_name'] ?? '').toString(),
-        paymentStatus: status,
-      ));
-    }
-
-    // Backfill missing names from the students collection if needed.
-    final missing = rows.where((r) => r.fullName.isEmpty).toList();
-    if (missing.isNotEmpty) {
-      final studentSnap = await db.collection('student').get();
-      final nameById = {
-        for (final d in studentSnap.docs)
-          (d.data()['student_id'] ?? d.id).toString():
-              (d.data()['full_name'] ?? '').toString(),
-      };
-      for (int i = 0; i < rows.length; i++) {
-        if (rows[i].fullName.isEmpty) {
-          rows[i] = StudentRow(
-            studentId: rows[i].studentId,
-            fullName: nameById[rows[i].studentId] ?? '-',
-            paymentStatus: rows[i].paymentStatus,
-          );
-        }
-      }
-    }
-
-    return (
-      stats: DashboardStats(
-        totalStudents: rows.length,
-        paidStudents: paid,
-        unpaidStudents: unpaid,
-        overdueStudents: overdue,
-      ),
-      students: rows,
-    );
-  }
-}
 
 // =============================================================
 // BOUNDARY CLASS — TreasuryDashboardPage  [SDD-REQ-305]
@@ -142,7 +41,7 @@ class _TreasuryDashboardPageState extends State<TreasuryDashboardPage> {
 
   void loadDashboardStats() {
     setState(() {
-      _future = TreasuryController.getDashboardStats();
+      _future = FeeController.getDashboardStats();
     });
   }
 
@@ -177,6 +76,8 @@ class _TreasuryDashboardPageState extends State<TreasuryDashboardPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+      // Drawer so the header's menu icon reaches the treasury navigation here.
+      drawer: const TreasuryMenu(),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -402,8 +303,6 @@ class _StudentTile extends StatelessWidget {
 
   Color _statusColor(String status) {
     switch (status.toLowerCase()) {
-      case 'paid':
-        return const Color(0xFF2E7D32);
       case 'overdue':
         return Colors.redAccent;
       default:

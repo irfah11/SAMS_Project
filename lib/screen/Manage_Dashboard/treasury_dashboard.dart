@@ -80,11 +80,13 @@ class TreasuryDashboard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 10),
+
+              // Profile Section (Treasury Staff)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    'Welcome Back,\nNURUL BALQIS',
+                    'Welcome Back,',
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
@@ -114,6 +116,8 @@ class TreasuryDashboard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 25),
+
+              // Event banners
               _buildEventBanner('assets/Mobility.jpg'),
               const SizedBox(height: 15),
               _buildEventBanner('assets/LarianAmal.jpg'),

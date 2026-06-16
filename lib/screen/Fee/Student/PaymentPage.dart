@@ -1,20 +1,28 @@
-import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:flutter/material.dart';
-import 'package:flutter_stripe/flutter_stripe.dart' hide Card;
 import 'package:moon_design/moon_design.dart';
 import 'package:sams/Domain/fee.dart';
 import 'package:sams/Controller/Fee/FeeController.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import 'FeePage.dart';
-import 'TransactionPage.dart';
 
 // =============================================================
 // BOUNDARY CLASS — PaymentPage  [SDD-REQ-302]
-// Payment logic + backend hooks live in FeeController
-// (lib/Controller/Fee/FeeController.dart).
+// Payment logic lives in FeeController (processPayment()).
+// This is a simulated gateway: choosing any bank / entering any card and
+// tapping "Confirm payment" records the payment in Firestore and succeeds.
 // =============================================================
 enum PaymentMethod { fpx, card }
+
+// FPX banks shown in the dropdown (cosmetic — any choice succeeds).
+const List<String> kFpxBanks = [
+  'Maybank2u',
+  'CIMB Clicks',
+  'Public Bank',
+  'RHB Bank',
+  'MyBSN',
+  'Affin Bank',
+  'Bank Islam',
+];
 
 class PaymentPage extends StatefulWidget {
   final String studentId;
@@ -36,11 +44,21 @@ class PaymentPage extends StatefulWidget {
 
 class _PaymentPageState extends State<PaymentPage> {
   PaymentMethod? _selectedPaymentMethod;
+  String? _selectedBank;
 
-  // Whether Stripe's CardField currently holds a complete, valid card.
-  bool _cardComplete = false;
+  final _cardNumberCtrl = TextEditingController();
+  final _expiryCtrl = TextEditingController();
+  final _cvvCtrl = TextEditingController();
 
   bool _submitting = false;
+
+  @override
+  void dispose() {
+    _cardNumberCtrl.dispose();
+    _expiryCtrl.dispose();
+    _cvvCtrl.dispose();
+    super.dispose();
+  }
 
   void selectPaymentMethod(PaymentMethod method) {
     setState(() => _selectedPaymentMethod = method);
@@ -50,93 +68,31 @@ class _PaymentPageState extends State<PaymentPage> {
     if (_submitting) return false;
     if (widget.totalOutstanding <= 0) return false;
     if (_selectedPaymentMethod == null) return false;
-    // FPX → bank is chosen later on the Billplz page, so selecting it is enough.
-    if (_selectedPaymentMethod == PaymentMethod.fpx) return true;
-    return _cardComplete;
+    if (_selectedPaymentMethod == PaymentMethod.fpx) return _selectedBank != null;
+    // Card → just need a card number typed (any value works).
+    return _cardNumberCtrl.text.trim().isNotEmpty;
   }
 
+  // processPayment() — records the payment in Firestore (FeeController), which
+  // marks the Fee as Paid and stores a transaction, then shows the receipt.
   Future<void> processPayment() async {
     if (!_canSubmit) return;
     setState(() => _submitting = true);
 
-    try {
-      // ---- FPX → hand off to Billplz hosted page ----
-      // The Billplz webhook records the payment server-side, so we DON'T record
-      // here; we navigate to a screen that watches Firestore for the update.
-      if (_selectedPaymentMethod == PaymentMethod.fpx) {
-        await _payWithFpx();
-        return;
-      }
+    final method = _selectedPaymentMethod == PaymentMethod.fpx
+        ? 'FPX${_selectedBank != null ? ' - $_selectedBank' : ''}'
+        : 'Credit / Debit Card';
 
-      // ---- Card → charge through Stripe, then record in Firestore ----
-      await _chargeCardWithStripe();
-
-      final result = await FeeController.processPayment(
-        studentId: widget.studentId,
-        semesterId: widget.semesterId,
-        amount: widget.totalOutstanding,
-        paymentMethod: 'Credit Card',
-      );
-
-      if (!mounted) return;
-      setState(() => _submitting = false);
-      displayPaymentResult(result);
-    } on StripeException catch (e) {
-      if (!mounted) return;
-      setState(() => _submitting = false);
-      displayPaymentResult(PaymentResult(
-        success: false,
-        message: e.error.localizedMessage ?? 'Card payment was declined.',
-      ));
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _submitting = false);
-      displayPaymentResult(PaymentResult(success: false, message: '$e'));
-    }
-  }
-
-  /// Creates a PaymentIntent on the backend, then confirms it with the card
-  /// entered in the Stripe CardField. Throws on failure (caught by caller).
-  Future<void> _chargeCardWithStripe() async {
-    final clientSecret = await StripeBackend.createPaymentIntent(
+    final result = await FeeController.processPayment(
+      studentId: widget.studentId,
+      semesterId: widget.semesterId,
       amount: widget.totalOutstanding,
-      studentId: widget.studentId,
-      semesterId: widget.semesterId,
+      paymentMethod: method,
     );
-
-    await Stripe.instance.confirmPayment(
-      paymentIntentClientSecret: clientSecret,
-      data: const PaymentMethodParams.card(
-        paymentMethodData: PaymentMethodData(),
-      ),
-    );
-  }
-
-  /// Creates a Billplz bill, opens its hosted FPX page in the browser, then
-  /// hands off to a screen that waits for the webhook to mark the fee paid.
-  Future<void> _payWithFpx() async {
-    final billUrl = await BillplzBackend.createBill(
-      studentId: widget.studentId,
-      semesterId: widget.semesterId,
-    );
-
-    final opened = await launchUrl(
-      Uri.parse(billUrl),
-      mode: LaunchMode.externalApplication,
-    );
-    if (!opened) {
-      throw Exception('Could not open the FPX payment page.');
-    }
 
     if (!mounted) return;
     setState(() => _submitting = false);
-    Navigator.of(context).pushReplacement(MaterialPageRoute(
-      builder: (_) => FpxPendingPage(
-        studentId: widget.studentId,
-        semesterId: widget.semesterId,
-        totalOutstanding: widget.totalOutstanding,
-      ),
-    ));
+    displayPaymentResult(result);
   }
 
   void displayPaymentResult(PaymentResult result) {
@@ -198,16 +154,7 @@ class _PaymentPageState extends State<PaymentPage> {
                     ),
                     const Divider(height: 24, thickness: 0.5),
 
-                    // displayFeeSummary()
-                    const SectionTitle('FEE SUMMARY'),
-                    const SizedBox(height: 12),
-                    LabelAmountRow(label: 'Tuition fee',      amount: f.tuitionFee),
-                    LabelAmountRow(label: 'Medical fee',      amount: f.medicalFee),
-                    LabelAmountRow(label: 'Student welfare',  amount: f.welfareFee),
-                    LabelAmountRow(label: 'Insurance',        amount: f.insuranceFee),
-                    LabelAmountRow(label: 'Student activity', amount: f.activityFee),
-                    LabelAmountRow(label: 'Hostel activity',  amount: f.hostelFee),
-                    LabelAmountRow(label: 'Total outstanding',amount: widget.totalOutstanding),
+                    displayFeeSummary(f),
                     const SizedBox(height: 20),
 
                     const SectionTitle('PAYMENT METHOD'),
@@ -251,6 +198,25 @@ class _PaymentPageState extends State<PaymentPage> {
     );
   }
 
+  // displayFeeSummary() — SDD-REQ-302: itemized fee breakdown + total.
+  Widget displayFeeSummary(Fee f) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionTitle('FEE SUMMARY'),
+        const SizedBox(height: 12),
+        LabelAmountRow(label: 'Tuition fee',      amount: f.tuitionFee),
+        LabelAmountRow(label: 'Medical fee',      amount: f.medicalFee),
+        LabelAmountRow(label: 'Student welfare',  amount: f.welfareFee),
+        LabelAmountRow(label: 'Insurance',        amount: f.insuranceFee),
+        LabelAmountRow(label: 'Student activity', amount: f.activityFee),
+        LabelAmountRow(label: 'Hostel activity',  amount: f.hostelFee),
+        LabelAmountRow(
+            label: 'Total outstanding', amount: widget.totalOutstanding),
+      ],
+    );
+  }
+
   Widget _buildFpxOption() {
     final selected = _selectedPaymentMethod == PaymentMethod.fpx;
     return Column(
@@ -276,12 +242,27 @@ class _PaymentPageState extends State<PaymentPage> {
           ),
         ),
         if (selected)
-          const Padding(
-            padding: EdgeInsets.fromLTRB(40, 0, 0, 8),
-            child: Text(
-              "You'll choose your bank on the secure Billplz page after you "
-              'tap Confirm payment.',
-              style: TextStyle(fontSize: 12, color: Colors.black45),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(40, 0, 0, 8),
+            child: DropdownButtonFormField<String>(
+              initialValue: _selectedBank,
+              isExpanded: true,
+              decoration: InputDecoration(
+                isDense: true,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  borderSide: const BorderSide(color: Color(0xFFCCCCCC)),
+                ),
+              ),
+              hint: const Text('-Select Bank-',
+                  style: TextStyle(fontSize: 13)),
+              items: [
+                for (final bank in kFpxBanks)
+                  DropdownMenuItem(value: bank, child: Text(bank)),
+              ],
+              onChanged: (v) => setState(() => _selectedBank = v),
             ),
           ),
       ],
@@ -328,23 +309,31 @@ class _PaymentPageState extends State<PaymentPage> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                // Stripe's secure card input — raw PAN/CVC never touch our app.
-                Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: const Color(0xFFCCCCCC)),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: CardField(
-                    onCardChanged: (card) {
-                      setState(() => _cardComplete = card?.complete ?? false);
-                    },
-                  ),
+                TextField(
+                  controller: _cardNumberCtrl,
+                  keyboardType: TextInputType.number,
+                  onChanged: (_) => setState(() {}),
+                  decoration: _cardInput('Card Number'),
                 ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Test card: 4242 4242 4242 4242 · any future expiry · any CVC',
-                  style: TextStyle(fontSize: 11, color: Colors.black45),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _expiryCtrl,
+                        decoration: _cardInput('Expiry date'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: _cvvCtrl,
+                        keyboardType: TextInputType.number,
+                        obscureText: true,
+                        decoration: _cardInput('CVV'),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -352,146 +341,23 @@ class _PaymentPageState extends State<PaymentPage> {
       ],
     );
   }
-}
 
-// =============================================================
-// FpxPendingPage — waits (in realtime) for the Billplz webhook to mark the
-// Fee paid, then shows success. No polling: it listens to the Fee document.
-// =============================================================
-class FpxPendingPage extends StatelessWidget {
-  final String studentId;
-  final String semesterId;
-  final double totalOutstanding;
-
-  const FpxPendingPage({
-    super.key,
-    required this.studentId,
-    required this.semesterId,
-    required this.totalOutstanding,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final stream = FirebaseFirestore.instance
-        .collection('Fee')
-        .where('student_id', isEqualTo: studentId)
-        .where('semester_id', isEqualTo: semesterId)
-        .limit(1)
-        .snapshots();
-
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SamsHeader(),
-            Expanded(
-              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                stream: stream,
-                builder: (context, snap) {
-                  final paid = snap.hasData &&
-                      snap.data!.docs.isNotEmpty &&
-                      (snap.data!.docs.first.data()['payment_status'] ?? '')
-                              .toString()
-                              .toLowerCase() ==
-                          'paid';
-                  return paid ? _paidView(context) : _waitingView(context);
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _waitingView(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const CircularProgressIndicator(),
-          const SizedBox(height: 24),
-          const Text(
-            'Waiting for your FPX payment…',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Complete the payment in the page that opened. This screen updates '
-            'automatically once Billplz confirms it.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13, color: Colors.black54, height: 1.4),
-          ),
-          const SizedBox(height: 28),
-          MoonOutlinedButton(
-            buttonSize: MoonButtonSize.lg,
-            isFullWidth: true,
-            onTap: () => Navigator.of(context).pop(),
-            label: const Text('Cancel',
-                style: TextStyle(fontWeight: FontWeight.w700)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _paidView(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-      child: Column(
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: Color(0xFFEAF5EA),
-            ),
-            child: const Icon(Icons.check, color: Color(0xFF2E7D32), size: 32),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Payment Successful',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Your FPX payment for $semesterId has been received.',
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-                fontSize: 13, color: Colors.black87, height: 1.4),
-          ),
-          const SizedBox(height: 28),
-          MoonOutlinedButton(
-            buttonSize: MoonButtonSize.lg,
-            isFullWidth: true,
-            onTap: () => Navigator.of(context)
-                .pushReplacement(MaterialPageRoute(
-              builder: (_) => TransactionPage(studentId: studentId),
-            )),
-            label: const Text('View transactions',
-                style: TextStyle(fontWeight: FontWeight.w700)),
-          ),
-          const SizedBox(height: 12),
-          MoonOutlinedButton(
-            buttonSize: MoonButtonSize.lg,
-            isFullWidth: true,
-            onTap: () =>
-                Navigator.of(context).popUntil((route) => route.isFirst),
-            label: const Text('Done',
-                style: TextStyle(fontWeight: FontWeight.w700)),
-          ),
-        ],
+  InputDecoration _cardInput(String hint) {
+    return InputDecoration(
+      hintText: hint,
+      isDense: true,
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(6),
+        borderSide: const BorderSide(color: Color(0xFFCCCCCC)),
       ),
     );
   }
 }
 
 // =============================================================
-// PaymentSuccessPage
+// PaymentSuccessPage  [SDD-REQ-303: receipt summary]
 // =============================================================
 class PaymentSuccessPage extends StatelessWidget {
   final String studentId;

@@ -1,28 +1,22 @@
-
-import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
-import 'package:http/http.dart' as http;
 import 'package:sams/Domain/fee.dart';
 import 'package:sams/Domain/transaction.dart';
-import 'package:sams/config/billplz_config.dart';
-import 'package:sams/config/stripe_config.dart';
 
 // =============================================================
-// CONTROLLER — FeeController
-// Single entry point for all Fee-module data access:
-//   • fetching a student's current fee record       (FeePage)
-//   • fetching + grouping their transactions         (TransactionPage)
-//   • recording a payment                            (PaymentPage)
-//   • building a receipt (Student + Fee join)        (TransactionDetailsPage)
+// CONTROLLER — FeeController  [SDD-REQ-308]
+// Single control class for ALL Fee-module business logic:
+//   student fees, payments, transactions, receipts, and the Treasury
+//   administrative functions (dashboard stats, financial records, reports,
+//   overdue management, access blocking).
 // UI widgets stay in the screen files; only logic lives here.
 // =============================================================
 class FeeController {
   static final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   // ---------------------------------------------------------------
-  // FEE — current fee record for a student
+  // getFeeRecord() — itemized fee record for a student (FeePage / PaymentPage)
   // ---------------------------------------------------------------
-  static Future<Fee> fetchCurrentFees(String studentId) async {
+  static Future<Fee> getFeeRecord(String studentId) async {
     final snap = await _db
         .collection('Fee')
         .where('student_id', isEqualTo: studentId)
@@ -32,38 +26,11 @@ class FeeController {
     if (snap.docs.isEmpty) {
       throw Exception('No fee record found for $studentId');
     }
-
     return Fee.fromFirestore(snap.docs.first);
   }
 
   // ---------------------------------------------------------------
-  // TRANSACTIONS — list + grouping
-  // ---------------------------------------------------------------
-  static Future<List<Transaction>> fetchTransactions(String studentId) async {
-    final snapshot = await _db
-        .collection('transactions')
-        .where('student_id', isEqualTo: studentId)
-        .where('payment_success_stat', isEqualTo: 'success')
-        .orderBy('transaction_date', descending: true)
-        .get();
-
-    return snapshot.docs.map(Transaction.fromFirestore).toList();
-  }
-
-  /// Group transactions by academic year, preserving recency order.
-  /// Returns a list of (year, transactions) pairs.
-  static List<MapEntry<String, List<Transaction>>> groupByYear(
-    List<Transaction> txs,
-  ) {
-    final map = <String, List<Transaction>>{};
-    for (final t in txs) {
-      map.putIfAbsent(t.academicYear, () => []).add(t);
-    }
-    return map.entries.toList();
-  }
-
-  // ---------------------------------------------------------------
-  // PAYMENT — record a successful payment + mark the fee paid
+  // processPayment() — record a payment, then mark the fee paid
   // ---------------------------------------------------------------
   static Future<PaymentResult> processPayment({
     required String studentId,
@@ -89,23 +56,8 @@ class FeeController {
       // 1. Record the payment in the 'transactions' collection.
       await _db.collection('transactions').add(txn.toFirebase());
 
-      // 2. Mark this student's fee for the semester as fully paid and
-      //    restore access. Done as a query+update so it targets the
-      //    correct Fee document regardless of its doc id.
-      final feeQuery = await _db
-          .collection('Fee')
-          .where('student_id', isEqualTo: studentId)
-          .where('semester_id', isEqualTo: semesterId)
-          .limit(1)
-          .get();
-
-      if (feeQuery.docs.isNotEmpty) {
-        await feeQuery.docs.first.reference.update({
-          'payment_status': 'Paid',
-          'access_status': 'Unblocked',
-          'total_outstanding': 0,
-        });
-      }
+      // 2. Update the fee record (payment_status → Paid).
+      await updatePaymentStatus(studentId: studentId, semesterId: semesterId);
 
       return PaymentResult(
         success: true,
@@ -117,19 +69,52 @@ class FeeController {
     }
   }
 
-  // Build a human-readable receipt number, e.g. "RP2605-43187".
-  static String _generateTransactionId(DateTime now) {
-    final yy = (now.year % 100).toString().padLeft(2, '0');
-    final mm = now.month.toString().padLeft(2, '0');
-    final seq =
-        (now.millisecondsSinceEpoch % 100000).toString().padLeft(5, '0');
-    return 'RP$yy$mm-$seq';
+  // ---------------------------------------------------------------
+  // updatePaymentStatus() — mark the student's fee Paid + restore access
+  // ---------------------------------------------------------------
+  static Future<void> updatePaymentStatus({
+    required String studentId,
+    required String semesterId,
+  }) async {
+    final feeQuery = await _db
+        .collection('Fee')
+        .where('student_id', isEqualTo: studentId)
+        .where('semester_id', isEqualTo: semesterId)
+        .limit(1)
+        .get();
+
+    if (feeQuery.docs.isNotEmpty) {
+      await feeQuery.docs.first.reference.update({
+        'payment_status': 'Paid',
+        'access_status': 'Unblocked',
+        'total_outstanding': 0,
+      });
+    }
   }
 
   // ---------------------------------------------------------------
-  // RECEIPT — joins Transaction + Student.full_name + Fee breakdown
+  // getTransactionHistory() — a student's successful transactions
   // ---------------------------------------------------------------
-  static Future<ReceiptData> fetchReceiptData(Transaction tx) async {
+  static Future<List<Transaction>> getTransactionHistory(
+      String studentId) async {
+    // Two equality filters only — no orderBy, so Firestore serves this from its
+    // automatic indexes (no composite index needed). One student's history is
+    // small, so we sort by date client-side below.
+    final snapshot = await _db
+        .collection('transactions')
+        .where('student_id', isEqualTo: studentId)
+        .where('payment_success_stat', isEqualTo: 'success')
+        .get();
+
+    final txs = snapshot.docs.map(Transaction.fromFirestore).toList();
+    txs.sort((a, b) => b.transactionDate.compareTo(a.transactionDate));
+    return txs;
+  }
+
+  // ---------------------------------------------------------------
+  // getTransactionDetails() — full receipt (Transaction + Student + Fee)
+  // ---------------------------------------------------------------
+  static Future<ReceiptData> getTransactionDetails(Transaction tx) async {
     // ---- Student (3.3.2) lookup by student_id ----
     String studentName = '-';
     try {
@@ -186,6 +171,257 @@ class FeeController {
     );
   }
 
+  // ---------------------------------------------------------------
+  // getDashboardStats() — Treasury: counts + searchable student list
+  // ---------------------------------------------------------------
+  static Future<({DashboardStats stats, List<StudentRow> students})>
+      getDashboardStats() async {
+    final feeSnap = await _db.collection('Fee').get();
+
+    int paid = 0, unpaid = 0, overdue = 0;
+    final rows = <StudentRow>[];
+
+    for (final doc in feeSnap.docs) {
+      final data = doc.data();
+      final status = (data['payment_status'] ?? 'Unpaid').toString();
+
+      switch (status.toLowerCase()) {
+        case 'paid':
+          paid++;
+          break;
+        case 'overdue':
+          overdue++;
+          unpaid++; // overdue counts as unpaid for the summary tile
+          break;
+        default:
+          unpaid++;
+      }
+
+      rows.add(StudentRow(
+        studentId: (data['student_id'] ?? '').toString(),
+        fullName: (data['student_name'] ?? '').toString(),
+        paymentStatus: status,
+      ));
+    }
+
+    // Backfill missing names from the students collection if needed.
+    final missing = rows.where((r) => r.fullName.isEmpty).toList();
+    if (missing.isNotEmpty) {
+      final studentSnap = await _db.collection('student').get();
+      final nameById = {
+        for (final d in studentSnap.docs)
+          (d.data()['student_id'] ?? d.id).toString():
+              (d.data()['full_name'] ?? '').toString(),
+      };
+      for (int i = 0; i < rows.length; i++) {
+        if (rows[i].fullName.isEmpty) {
+          rows[i] = StudentRow(
+            studentId: rows[i].studentId,
+            fullName: nameById[rows[i].studentId] ?? '-',
+            paymentStatus: rows[i].paymentStatus,
+          );
+        }
+      }
+    }
+
+    return (
+      stats: DashboardStats(
+        totalStudents: rows.length,
+        paidStudents: paid,
+        unpaidStudents: unpaid,
+        overdueStudents: overdue,
+      ),
+      students: rows,
+    );
+  }
+
+  // ---------------------------------------------------------------
+  // getStudentFinancialRecord() — Treasury: one student's full financials
+  // ---------------------------------------------------------------
+  static Future<StudentFinancialRecord> getStudentFinancialRecord(
+      String studentId) async {
+    // Student profile
+    String fullName = '-';
+    final studentSnap = await _db
+        .collection('student')
+        .where('student_id', isEqualTo: studentId)
+        .limit(1)
+        .get();
+    if (studentSnap.docs.isNotEmpty) {
+      fullName = (studentSnap.docs.first.data()['full_name'] ?? '-').toString();
+    }
+
+    // Fee record
+    final feeSnap = await _db
+        .collection('Fee')
+        .where('student_id', isEqualTo: studentId)
+        .limit(1)
+        .get();
+    if (feeSnap.docs.isEmpty) {
+      throw Exception('No fee record for $studentId');
+    }
+    final fee = Fee.fromFirestore(feeSnap.docs.first);
+
+    final semesterFee = fee.tuitionFee +
+        fee.medicalFee +
+        fee.welfareFee +
+        fee.insuranceFee +
+        fee.activityFee +
+        fee.hostelFee;
+    final balance = fee.totalOutstanding;
+    final amountPaid =
+        (semesterFee - balance).clamp(0, double.infinity).toDouble();
+
+    return StudentFinancialRecord(
+      studentId: studentId,
+      fullName: fullName,
+      semesterId: fee.semesterId,
+      semesterFee: semesterFee,
+      amountPaid: amountPaid,
+      balance: balance,
+      paymentStatus: fee.paymentStatus,
+      accessStatus: fee.accessStatus,
+      tuitionFee: fee.tuitionFee,
+      medicalFee: fee.medicalFee,
+      welfareFee: fee.welfareFee,
+      insuranceFee: fee.insuranceFee,
+      activityFee: fee.activityFee,
+      hostelFee: fee.hostelFee,
+    );
+  }
+
+  // ---------------------------------------------------------------
+  // generatePDFReport() — Treasury: record a fee report for a student
+  // (The actual PDF export is handled later; the UI shows a confirmation.)
+  // ---------------------------------------------------------------
+  static Future<void> generatePDFReport(StudentFinancialRecord r) async {
+    await _db.collection('fee_reports').add({
+      'student_id': r.studentId,
+      'student_name': r.fullName,
+      'semester_id': r.semesterId,
+      'semester_fee': r.semesterFee,
+      'amount_paid': r.amountPaid,
+      'balance': r.balance,
+      'payment_status': r.paymentStatus,
+      'created_at': FieldValue.serverTimestamp(),
+    });
+  }
+
+  // ---------------------------------------------------------------
+  // getOverdueList() — Treasury: all students with an Overdue fee
+  // ---------------------------------------------------------------
+  static Future<List<OverdueStudent>> getOverdueList() async {
+    final feeSnap = await _db
+        .collection('Fee')
+        .where('payment_status', isEqualTo: 'Overdue')
+        .get();
+
+    final ids = feeSnap.docs
+        .map((d) => (d.data()['student_id'] ?? '').toString())
+        .toList();
+
+    // Fetch student names in one batched read.
+    final nameById = <String, String>{};
+    if (ids.isNotEmpty) {
+      final studentSnap = await _db.collection('student').get();
+      for (final d in studentSnap.docs) {
+        final sid = (d.data()['student_id'] ?? d.id).toString();
+        nameById[sid] = (d.data()['full_name'] ?? '-').toString();
+      }
+    }
+
+    return feeSnap.docs.map((d) {
+      final data = d.data();
+      final sid = (data['student_id'] ?? '').toString();
+      return OverdueStudent(
+        studentId: sid,
+        fullName: nameById[sid] ?? (data['student_name'] ?? '-').toString(),
+        accessStatus: (data['access_status'] ?? 'Unblocked').toString(),
+        paymentStatus: (data['payment_status'] ?? 'Overdue').toString(),
+      );
+    }).toList();
+  }
+
+  // ---------------------------------------------------------------
+  // toggleAccessStatus() — Treasury: flip access Blocked <-> Unblocked
+  // ---------------------------------------------------------------
+  static Future<String> toggleAccessStatus({
+    required String studentId,
+    required String currentStatus,
+  }) async {
+    final isUnblocked =
+        currentStatus.trim().toLowerCase().startsWith('unblock');
+    final newStatus = isUnblocked ? 'Blocked' : 'Unblocked';
+
+    final feeSnap = await _db
+        .collection('Fee')
+        .where('student_id', isEqualTo: studentId)
+        .limit(1)
+        .get();
+    if (feeSnap.docs.isNotEmpty) {
+      await feeSnap.docs.first.reference.update({'access_status': newStatus});
+    }
+    return newStatus;
+  }
+
+  // ---------------------------------------------------------------
+  // sendOverdueNotification() — record an automated notification event
+  // ---------------------------------------------------------------
+  static Future<void> sendOverdueNotification({
+    required String studentId,
+    required String accessStatus,
+    required String paymentStatus,
+  }) async {
+    final message = accessStatus.toLowerCase() == 'blocked'
+        ? 'Your academic access has been blocked due to overdue fees.'
+        : 'Your academic access has been restored.';
+
+    await _db.collection('notifications').add({
+      'student_id': studentId,
+      'access_status': accessStatus,
+      'payment_status': paymentStatus,
+      'message': message,
+      'created_at': FieldValue.serverTimestamp(),
+    });
+  }
+
+  // ---------------------------------------------------------------
+  // enforceAccessBlock() — auto-block every student whose fee is still
+  // Unpaid/Overdue (the Week-5 deadline rule). Notifies each one.
+  // ---------------------------------------------------------------
+  static Future<int> enforceAccessBlock() async {
+    final feeSnap = await _db.collection('Fee').get();
+
+    int blocked = 0;
+    for (final doc in feeSnap.docs) {
+      final data = doc.data();
+      final status = (data['payment_status'] ?? '').toString().toLowerCase();
+      if (status == 'unpaid' || status == 'overdue') {
+        await doc.reference.update({'access_status': 'Blocked'});
+        await sendOverdueNotification(
+          studentId: (data['student_id'] ?? '').toString(),
+          accessStatus: 'Blocked',
+          paymentStatus: (data['payment_status'] ?? '').toString(),
+        );
+        blocked++;
+      }
+    }
+    return blocked;
+  }
+
+  // ===============================================================
+  // Private helpers (implementation detail — not part of the SDD API)
+  // ===============================================================
+
+  // Build a human-readable receipt number, e.g. "RP2605-43187".
+  static String _generateTransactionId(DateTime now) {
+    final yy = (now.year % 100).toString().padLeft(2, '0');
+    final mm = now.month.toString().padLeft(2, '0');
+    final seq =
+        (now.millisecondsSinceEpoch % 100000).toString().padLeft(5, '0');
+    return 'RP$yy$mm-$seq';
+  }
+
   static double _asDouble(dynamic v) {
     if (v is num) return v.toDouble();
     if (v is String) return double.tryParse(v) ?? 0.0;
@@ -194,8 +430,10 @@ class FeeController {
 }
 
 // =============================================================
-// PaymentResult — outcome of a payment attempt
+// MODELS / DTOs used by the Fee module
 // =============================================================
+
+// PaymentResult — outcome of a payment attempt
 class PaymentResult {
   final bool success;
   final String message;
@@ -208,10 +446,7 @@ class PaymentResult {
   });
 }
 
-// =============================================================
-// ReceiptData — snapshot needed to render a receipt
-// (joins Transaction + Student + Fee)
-// =============================================================
+// ReceiptData — snapshot needed to render a receipt (Transaction + Student + Fee)
 class ReceiptData {
   final String studentName;
   final String studentId;
@@ -245,97 +480,81 @@ class ReceiptData {
   });
 }
 
-// =============================================================
-// STRIPE BACKEND HOOK
-// -------------------------------------------------------------
-// Stripe requires a PaymentIntent to be created with your SECRET key, which
-// must stay on a server (e.g. a Firebase Cloud Function). The app only ever
-// sees the resulting `client_secret`.
-//
-// TODO(backend): deploy an endpoint that does, in Node:
-//   const pi = await stripe.paymentIntents.create({
-//     amount, currency, metadata: { student_id, semester_id },
-//   });
-//   return { client_secret: pi.client_secret };
-// then set StripeConfig.createPaymentIntentUrl to its URL.
-// =============================================================
-class StripeBackend {
-  /// Returns the PaymentIntent `client_secret` for [amount] (major units, e.g.
-  /// RM 15.10). Throws a clear error until the backend URL is configured.
-  static Future<String> createPaymentIntent({
-    required double amount,
-    required String studentId,
-    required String semesterId,
-  }) async {
-    if (StripeConfig.createPaymentIntentUrl.isEmpty) {
-      throw Exception(
-        'Card payments are not live yet: no payment backend configured. '
-        'Deploy a Cloud Function that creates a Stripe PaymentIntent with your '
-        'secret key and set StripeConfig.createPaymentIntentUrl.',
-      );
-    }
+// DashboardStats — Treasury summary counts
+class DashboardStats {
+  final int totalStudents;
+  final int paidStudents;
+  final int unpaidStudents;
+  final int overdueStudents;
 
-    final response = await http.post(
-      Uri.parse(StripeConfig.createPaymentIntentUrl),
-      headers: const {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        // Stripe expects the amount in the smallest currency unit (sen).
-        'amount': (amount * 100).round(),
-        'currency': StripeConfig.currency,
-        'student_id': studentId,
-        'semester_id': semesterId,
-      }),
-    );
-
-    if (response.statusCode != 200 && response.statusCode != 201) {
-      throw Exception('Backend error (${response.statusCode}): ${response.body}');
-    }
-
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final secret = data['client_secret'] ?? data['clientSecret'];
-    if (secret == null) {
-      throw Exception('Backend did not return a client_secret.');
-    }
-    return secret.toString();
-  }
+  const DashboardStats({
+    required this.totalStudents,
+    required this.paidStudents,
+    required this.unpaidStudents,
+    required this.overdueStudents,
+  });
 }
 
-// =============================================================
-// BILLPLZ BACKEND HOOK (FPX online banking)
-// -------------------------------------------------------------
-// Asks our backend (the `createBill` Cloud Function) to create a Billplz bill
-// with the secret key and return the hosted payment URL. The app opens that URL;
-// Billplz then notifies the backend webhook, which marks the fee paid.
-// =============================================================
-class BillplzBackend {
-  /// Returns the hosted Billplz bill URL for this student's outstanding fee.
-  /// The amount is computed server-side from the Fee document.
-  static Future<String> createBill({
-    required String studentId,
-    required String semesterId,
-  }) async {
-    if (BillplzConfig.createBillUrl.isEmpty) {
-      throw Exception(
-        'FPX is not live yet: no payment backend configured. Deploy the '
-        'createBill Cloud Function and set BillplzConfig.createBillUrl.',
-      );
-    }
+// StudentRow — one row in the Treasury student list
+class StudentRow {
+  final String studentId;
+  final String fullName;
+  final String paymentStatus;
 
-    final response = await http.post(
-      Uri.parse(BillplzConfig.createBillUrl),
-      headers: const {'Content-Type': 'application/json'},
-      body: jsonEncode({'student_id': studentId, 'semester_id': semesterId}),
-    );
+  const StudentRow({
+    required this.studentId,
+    required this.fullName,
+    required this.paymentStatus,
+  });
+}
 
-    if (response.statusCode != 200 && response.statusCode != 201) {
-      throw Exception('Backend error (${response.statusCode}): ${response.body}');
-    }
+// StudentFinancialRecord — Treasury view of one student's financials
+class StudentFinancialRecord {
+  final String studentId;
+  final String fullName;
+  final String semesterId;
+  final double semesterFee;
+  final double amountPaid;
+  final double balance;
+  final String paymentStatus;
+  final String accessStatus;
 
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final url = data['url'];
-    if (url == null) {
-      throw Exception('Backend did not return a bill url.');
-    }
-    return url.toString();
-  }
+  final double tuitionFee;
+  final double medicalFee;
+  final double welfareFee;
+  final double insuranceFee;
+  final double activityFee;
+  final double hostelFee;
+
+  const StudentFinancialRecord({
+    required this.studentId,
+    required this.fullName,
+    required this.semesterId,
+    required this.semesterFee,
+    required this.amountPaid,
+    required this.balance,
+    required this.paymentStatus,
+    required this.accessStatus,
+    required this.tuitionFee,
+    required this.medicalFee,
+    required this.welfareFee,
+    required this.insuranceFee,
+    required this.activityFee,
+    required this.hostelFee,
+  });
+}
+
+// OverdueStudent — one overdue student in the Treasury list
+class OverdueStudent {
+  final String studentId;
+  final String fullName;
+  final String accessStatus;
+  final String paymentStatus;
+
+  const OverdueStudent({
+    required this.studentId,
+    required this.fullName,
+    required this.accessStatus,
+    required this.paymentStatus,
+  });
 }

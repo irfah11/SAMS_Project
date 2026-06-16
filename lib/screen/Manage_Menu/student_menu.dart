@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
-import '../Manage_subject_and_Coq_registration/student/coq_list.dart';
-import '../Manage_subject_and_Coq_registration/student/reg_dashboard.dart';
-import '../Manage_subject_and_Coq_registration/student/booked_coq.dart';
+import 'package:sams/screen/Manage_subject_and_Coq_registration/student/coq_list.dart';
+import 'package:sams/screen/Manage_subject_and_Coq_registration/student/reg_dashboard.dart';
+import 'package:sams/screen/Manage_subject_and_Coq_registration/student/booked_coq.dart';
+import 'package:sams/screen/Fee/Student/FeePage.dart';
+import 'package:sams/auth/auth_service.dart';
+import 'package:sams/auth/login_screen.dart';
 import '../Manage Attendance/student/Co-QSubject.dart';
 import '../Fee/Student/FeePage.dart';
 import '../../auth/auth_service.dart';
@@ -52,8 +55,7 @@ class StudentDrawer extends StatelessWidget {
                       // Return to the dashboard (the first route after login),
                       // popping any pages opened on top of it. If already on
                       // the dashboard this is a no-op.
-                      Navigator.of(context)
-                          .popUntil((route) => route.isFirst);
+                      Navigator.of(context).popUntil((route) => route.isFirst);
                     },
                   ),
                   const Divider(
@@ -153,8 +155,7 @@ class StudentDrawer extends StatelessWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) =>
-                                  const StudentCoQSubjectScreen(),
+                              builder: (_) => const StudentCoQSubjectScreen(),
                             ),
                           );
                         },
@@ -206,31 +207,25 @@ class StudentDrawer extends StatelessWidget {
                 'Logout',
                 style: TextStyle(color: Colors.red, fontSize: 15),
               ),
-              onTap: () {
-                Navigator.pop(context);
-                showDialog(
-                  context: context,
-                  builder: (_) => AlertDialog(
+              onTap: () async {
+                // Capture the root navigator BEFORE closing the drawer — after
+                // the drawer is popped its own context is defunct, which is why
+                // the dialog/logout previously did nothing.
+                final navigator = Navigator.of(context, rootNavigator: true);
+                Navigator.pop(context); // close the drawer
+
+                final confirmed = await showDialog<bool>(
+                  context: navigator.context,
+                  builder: (dialogCtx) => AlertDialog(
                     title: const Text('Logout'),
                     content: const Text('Are you sure you want to logout?'),
                     actions: [
                       TextButton(
-                        onPressed: () => Navigator.pop(context),
+                        onPressed: () => Navigator.pop(dialogCtx, false),
                         child: const Text('Cancel'),
                       ),
                       ElevatedButton(
-                        onPressed: () async {
-                          Navigator.pop(context);
-                          await AuthService().logout();
-                          if (context.mounted) {
-                            Navigator.pushAndRemoveUntil(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (_) => const LoginScreen()),
-                              (route) => false,
-                            );
-                          }
-                        },
+                        onPressed: () => Navigator.pop(dialogCtx, true),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.red,
                           foregroundColor: Colors.white,
@@ -240,6 +235,14 @@ class StudentDrawer extends StatelessWidget {
                     ],
                   ),
                 );
+
+                if (confirmed == true) {
+                  await AuthService().logout();
+                  navigator.pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    (route) => false,
+                  );
+                }
               },
             ),
             const SizedBox(height: 8),

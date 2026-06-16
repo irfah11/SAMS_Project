@@ -25,8 +25,12 @@ class _FeePageState extends State<FeePage> {
   @override
   void initState() {
     super.initState();
-    _feeFuture = FeeController.fetchCurrentFees(widget.studentId);
+    _feeFuture = fetchCurrentFees();
   }
+
+  // fetchCurrentFees() — SDD-REQ-301: load this student's current fee record.
+  Future<Fee> fetchCurrentFees() =>
+      FeeController.getFeeRecord(widget.studentId);
 
   void navigateToPayment(Fee fee) {
     Navigator.of(context).push(MaterialPageRoute(
@@ -43,6 +47,22 @@ class _FeePageState extends State<FeePage> {
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => TransactionPage(studentId: widget.studentId),
     ));
+  }
+
+  // Shown when a paid student taps the (disabled) Pay tuition button.
+  void _showNoOutstandingDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        content: const Text('No outstanding amount'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -92,18 +112,42 @@ class _FeePageState extends State<FeePage> {
                         LabelAmountRow(label: 'Student welfare',  amount: fee.welfareFee),
                         LabelAmountRow(label: 'Insurance',        amount: fee.insuranceFee),
                         LabelAmountRow(label: 'Student activity', amount: fee.activityFee),
-                        LabelAmountRow(label: 'Hostel activity',  amount: fee.hostelFee),
+                        LabelAmountRow(label: 'Hostel',  amount: fee.hostelFee),
                         LabelAmountRow(label: 'Total outstanding',amount: fee.totalOutstanding),
                         const SizedBox(height: 28),
-                        MoonOutlinedButton(
-                          buttonSize: MoonButtonSize.lg,
-                          isFullWidth: true,
-                          onTap: () => navigateToPayment(fee),
-                          label: const Text(
-                            'Pay tuition',
-                            style: TextStyle(fontWeight: FontWeight.w700),
+                        if (fee.totalOutstanding > 0)
+                          MoonOutlinedButton(
+                            buttonSize: MoonButtonSize.lg,
+                            isFullWidth: true,
+                            onTap: () => navigateToPayment(fee),
+                            label: const Text(
+                              'Pay tuition',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                          )
+                        else
+                          // Nothing owed — greyed out, taps just explain why.
+                          InkWell(
+                            onTap: _showNoOutstandingDialog,
+                            child: Container(
+                              width: double.infinity,
+                              height: 48,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEDEDED),
+                                borderRadius: BorderRadius.circular(8),
+                                border:
+                                    Border.all(color: const Color(0xFFBDBDBD)),
+                              ),
+                              child: const Text(
+                                'Pay tuition',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF9E9E9E),
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
                         const SizedBox(height: 12),
                         MoonOutlinedButton(
                           buttonSize: MoonButtonSize.lg,

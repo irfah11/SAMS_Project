@@ -1,231 +1,21 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:moon_design/moon_design.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
-import 'package:sams/Domain/fee.dart';
 
+import 'package:sams/Controller/Fee/FeeController.dart';
 import 'package:sams/screen/Fee/Student/FeePage.dart'
-    show SamsHeader, formatMoney, formatDate;
+    show SamsHeader, formatMoney;
+import 'package:sams/screen/Manage_Menu/treasury_menu.dart';
 
 import 'TreasuryDashboardPage.dart' show kTreasuryGreen;
 
-// =============================================================
-// MODEL — StudentFinancialRecord
-// (joins Student 3.3.2 + Fee 3.3.7)
-// =============================================================
-class StudentFinancialRecord {
-  final String studentId;
-  final String fullName;
-  final String semesterId;
-  final double semesterFee;   // sum of all fee components
-  final double amountPaid;    // semesterFee - total_outstanding
-  final double balance;       // total_outstanding
-  final String paymentStatus; // Paid | Unpaid | Overdue
-  final String accessStatus;  // Blocked | Unblocked
-
-  // breakdown (used by the PDF report)
-  final double tuitionFee;
-  final double medicalFee;
-  final double welfareFee;
-  final double insuranceFee;
-  final double activityFee;
-  final double hostelFee;
-
-  const StudentFinancialRecord({
-    required this.studentId,
-    required this.fullName,
-    required this.semesterId,
-    required this.semesterFee,
-    required this.amountPaid,
-    required this.balance,
-    required this.paymentStatus,
-    required this.accessStatus,
-    required this.tuitionFee,
-    required this.medicalFee,
-    required this.welfareFee,
-    required this.insuranceFee,
-    required this.activityFee,
-    required this.hostelFee,
-  });
-}
-
-// =============================================================
-// CONTROLLER — FeeController treasury methods
-// Per SDD-REQ-308:
-//   getStudentFinancialRecord(), toggleAccessStatus(),
-//   sendOverdueNotification(), generatePDFReport()
-// =============================================================
-class StudentRecordController {
-  static Future<StudentFinancialRecord> getStudentFinancialRecord(
-      String studentId) async {
-    final db = FirebaseFirestore.instance;
-
-    // Student profile
-    String fullName = '-';
-    final studentSnap = await db
-        .collection('student')
-        .where('student_id', isEqualTo: studentId)
-        .limit(1)
-        .get();
-    if (studentSnap.docs.isNotEmpty) {
-      fullName = (studentSnap.docs.first.data()['full_name'] ?? '-').toString();
-    }
-
-    // Fee record — most recent semester
-    final feeSnap = await db
-        .collection('Fee')
-        .where('student_id', isEqualTo: studentId)
-        .limit(1)
-        .get();
-    if (feeSnap.docs.isEmpty) {
-      throw Exception('No fee record for $studentId');
-    }
-    final fee = Fee.fromFirestore(feeSnap.docs.first);
-
-    final semesterFee = fee.tuitionFee +
-        fee.medicalFee +
-        fee.welfareFee +
-        fee.insuranceFee +
-        fee.activityFee +
-        fee.hostelFee;
-    final balance = fee.totalOutstanding;
-    final amountPaid =
-        (semesterFee - balance).clamp(0, double.infinity).toDouble();
-
-    return StudentFinancialRecord(
-      studentId: studentId,
-      fullName: fullName,
-      semesterId: fee.semesterId,
-      semesterFee: semesterFee,
-      amountPaid: amountPaid,
-      balance: balance,
-      paymentStatus: fee.paymentStatus,
-      accessStatus: fee.accessStatus,
-      tuitionFee: fee.tuitionFee,
-      medicalFee: fee.medicalFee,
-      welfareFee: fee.welfareFee,
-      insuranceFee: fee.insuranceFee,
-      activityFee: fee.activityFee,
-      hostelFee: fee.hostelFee,
-    );
-  }
-
-  /// Per SDD-REQ-308 toggleAccessStatus():
-  /// Flips access_status between Blocked / Unblocked. Tolerant of legacy
-  /// values like "Unblock " (trailing space) already in Firestore.
-  static Future<String> toggleAccessStatus({
-    required String studentId,
-    required String currentStatus,
-  }) async {
-    final isUnblocked =
-        currentStatus.trim().toLowerCase().startsWith('unblock');
-    final newStatus = isUnblocked ? 'Blocked' : 'Unblocked';
-
-    final db = FirebaseFirestore.instance;
-    final feeSnap = await db
-        .collection('Fee')
-        .where('student_id', isEqualTo: studentId)
-        .limit(1)
-        .get();
-    if (feeSnap.docs.isNotEmpty) {
-      await feeSnap.docs.first.reference.update({'access_status': newStatus});
-    }
-    return newStatus;
-  }
-
-  /// Per SDD-REQ-308 sendOverdueNotification().
-  /// TODO: wire up Firebase Cloud Messaging — for now we record the
-  /// notification event in Firestore so it can be picked up by a backend.
-  static Future<void> sendOverdueNotification({
-    required String studentId,
-    required String accessStatus,
-    required String paymentStatus,
-  }) async {
-    final db = FirebaseFirestore.instance;
-    final message = accessStatus.toLowerCase() == 'blocked'
-        ? 'Your academic access has been blocked due to overdue fees.'
-        : 'Your academic access has been restored.';
-
-    await db.collection('notifications').add({
-      'student_id': studentId,
-      'access_status': accessStatus,
-      'payment_status': paymentStatus,
-      'message': message,
-      'created_at': FieldValue.serverTimestamp(),
-    });
-  }
-
-  /// Per SDD-REQ-308 generatePDFReport().
-  static Future<void> generatePDFReport(StudentFinancialRecord r) async {
-    final pdf = pw.Document();
-
-    String money(double v) => 'RM ${formatMoney(v)}';
-
-    pdf.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
-        build: (context) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Text('SAMS — Student Fee Report',
-                style: pw.TextStyle(
-                    fontSize: 22, fontWeight: pw.FontWeight.bold)),
-            pw.SizedBox(height: 4),
-            pw.Text('Generated ${formatDate(DateTime.now())}',
-                style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700)),
-            pw.Divider(),
-            pw.SizedBox(height: 10),
-            pw.Text('Name: ${r.fullName}'),
-            pw.Text('Matric: ${r.studentId}'),
-            pw.Text('Semester: ${r.semesterId}'),
-            pw.Text('Payment Status: ${r.paymentStatus}'),
-            pw.Text('Access Status: ${r.accessStatus}'),
-            pw.SizedBox(height: 16),
-            pw.Text('FEE SUMMARY',
-                style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-            pw.SizedBox(height: 8),
-            _pdfRow('Tuition fee', money(r.tuitionFee)),
-            _pdfRow('Medical fee', money(r.medicalFee)),
-            _pdfRow('Student welfare', money(r.welfareFee)),
-            _pdfRow('Insurance', money(r.insuranceFee)),
-            _pdfRow('Student activity', money(r.activityFee)),
-            _pdfRow('Hostel activity', money(r.hostelFee)),
-            pw.Divider(),
-            _pdfRow('Semester Fee', money(r.semesterFee), bold: true),
-            _pdfRow('Amount Paid', money(r.amountPaid)),
-            _pdfRow('Balance', money(r.balance), bold: true),
-          ],
-        ),
-      ),
-    );
-
-    // Opens the system print/share dialog so the user can save the PDF.
-    await Printing.layoutPdf(onLayout: (format) async => pdf.save());
-  }
-
-  static pw.Widget _pdfRow(String label, String value, {bool bold = false}) {
-    final style = pw.TextStyle(
-      fontSize: 12,
-      fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
-    );
-    return pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(vertical: 3),
-      child: pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-        children: [pw.Text(label, style: style), pw.Text(value, style: style)],
-      ),
-    );
-  }
-}
+enum _ActionBanner { none, blocked, restored }
 
 // =============================================================
 // BOUNDARY CLASS — StudentRecordPage  [SDD-REQ-306]
+// SDD methods: loadStudentRecord(), generatePDFReport().
+// toggleAcademicAccess() (SDD-REQ-307 / SRS-REQ-309) is reused here at the
+// bottom so Treasury can block/unblock a student from their record too.
 // =============================================================
-enum _ActionBanner { none, blocked, restored }
-
 class StudentRecordPage extends StatefulWidget {
   final String studentId;
   const StudentRecordPage({super.key, required this.studentId});
@@ -238,8 +28,8 @@ class _StudentRecordPageState extends State<StudentRecordPage> {
   StudentFinancialRecord? _record;
   bool _loading = true;
   String? _error;
-  _ActionBanner _banner = _ActionBanner.none;
   bool _busy = false;
+  _ActionBanner _banner = _ActionBanner.none;
 
   @override
   void initState() {
@@ -247,14 +37,15 @@ class _StudentRecordPageState extends State<StudentRecordPage> {
     loadStudentRecord();
   }
 
+  // loadStudentRecord() — SDD-REQ-306: fetch this student's full financials.
   Future<void> loadStudentRecord() async {
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final r = await StudentRecordController
-          .getStudentFinancialRecord(widget.studentId);
+      final r =
+          await FeeController.getStudentFinancialRecord(widget.studentId);
       if (!mounted) return;
       setState(() {
         _record = r;
@@ -269,17 +60,65 @@ class _StudentRecordPageState extends State<StudentRecordPage> {
     }
   }
 
-  Future<void> _onToggleAccess() async {
+  // generatePDFReport() — SDD-REQ-306: compile this student's fee report.
+  Future<void> generatePDFReport() async {
+    if (_record == null) return;
+    try {
+      await FeeController.generatePDFReport(_record!);
+      if (!mounted) return;
+      _showReportGeneratedDialog();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to generate report: $e')),
+      );
+    }
+  }
+
+  // "Report Generated Successfully" confirmation.
+  void _showReportGeneratedDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(Icons.check_circle_outline,
+                  size: 56, color: Color(0xFF52DE76)),
+              SizedBox(height: 16),
+              Text(
+                'Report Generated\nSuccessfully',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // toggleAcademicAccess() — SDD-REQ-307 / SRS-REQ-309: block/unblock this
+  // student via FeeController, then notify them. Kept here (at the bottom) so
+  // Treasury can act on any student from their record, not only overdue ones.
+  Future<void> toggleAcademicAccess() async {
     if (_record == null || _busy) return;
     setState(() => _busy = true);
 
-    final newStatus = await StudentRecordController.toggleAccessStatus(
+    final newStatus = await FeeController.toggleAccessStatus(
       studentId: _record!.studentId,
       currentStatus: _record!.accessStatus,
     );
-
-    // SDD: sendOverdueNotification() runs after the toggle
-    await StudentRecordController.sendOverdueNotification(
+    await FeeController.sendOverdueNotification(
       studentId: _record!.studentId,
       accessStatus: newStatus,
       paymentStatus: _record!.paymentStatus,
@@ -310,22 +149,12 @@ class _StudentRecordPageState extends State<StudentRecordPage> {
     });
   }
 
-  Future<void> _onGenerateReport() async {
-    if (_record == null) return;
-    try {
-      await StudentRecordController.generatePDFReport(_record!);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to generate PDF: $e')),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+      // Drawer so the header's menu icon reaches the treasury navigation here.
+      drawer: const TreasuryMenu(),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -341,10 +170,12 @@ class _StudentRecordPageState extends State<StudentRecordPage> {
   Widget _buildContent() {
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) {
-      return Center(child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Text('Failed to load: $_error'),
-      ));
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text('Failed to load: $_error'),
+        ),
+      );
     }
     final r = _record!;
     return SingleChildScrollView(
@@ -393,7 +224,7 @@ class _StudentRecordPageState extends State<StudentRecordPage> {
           MoonOutlinedButton(
             buttonSize: MoonButtonSize.lg,
             isFullWidth: true,
-            onTap: _onGenerateReport,
+            onTap: generatePDFReport,
             label: const Text('Generate Report',
                 style: TextStyle(fontWeight: FontWeight.w700)),
           ),
@@ -401,7 +232,7 @@ class _StudentRecordPageState extends State<StudentRecordPage> {
           MoonOutlinedButton(
             buttonSize: MoonButtonSize.lg,
             isFullWidth: true,
-            onTap: _busy ? null : _onToggleAccess,
+            onTap: _busy ? null : toggleAcademicAccess,
             label: _busy
                 ? const SizedBox(
                     height: 18,
@@ -433,6 +264,28 @@ class _StudentRecordPageState extends State<StudentRecordPage> {
   }
 }
 
+class _Banner extends StatelessWidget {
+  final String text;
+  final Color bg;
+  const _Banner({required this.text, required this.bg});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(fontSize: 12, color: Colors.black87),
+      ),
+    );
+  }
+}
+
 // =============================================================
 // UI WIDGETS
 // =============================================================
@@ -458,28 +311,6 @@ class _LineRow extends StatelessWidget {
                 fontWeight: FontWeight.w500,
               )),
         ],
-      ),
-    );
-  }
-}
-
-class _Banner extends StatelessWidget {
-  final String text;
-  final Color bg;
-  const _Banner({required this.text, required this.bg});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(fontSize: 12, color: Colors.black87),
       ),
     );
   }
