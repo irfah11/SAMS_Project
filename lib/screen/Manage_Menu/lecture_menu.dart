@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-
 import 'package:sams/auth/auth_service.dart';
 import 'package:sams/auth/login_screen.dart';
-import '../Manage_subject_and_Coq_registration/Lecturer/approval_reg.dart';
+import 'package:sams/screen/Manage_subject_and_Coq_registration/Lecturer/approval_reg.dart';
+// IMPORT DASHBOARD DI SINI
+import 'package:sams/screen/Manage_subject_coQ_activity/Lecturer/lecturer_dashboard.dart';
 
 class LecturerDrawer extends StatelessWidget {
   const LecturerDrawer({super.key});
@@ -16,79 +17,79 @@ class LecturerDrawer extends StatelessWidget {
         elevation: 10,
         child: Column(
           children: [
-            // 1. Header SAMS (Blue Background)
+            // ================= HEADER =================
             Container(
               height: 100,
               width: double.infinity,
-              color: const Color(0xFF4C66EE), // Darker blue for Lecturer
+              color: const Color(0xFF4C66EE),
               alignment: Alignment.bottomLeft,
               padding: const EdgeInsets.only(left: 20, bottom: 15),
               child: const Text(
                 'SAMS',
                 style: TextStyle(
-                  color: Colors.black,
+                  color: Colors.white,
                   fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.2,
+                  fontWeight: FontWeight.w900,
                 ),
               ),
             ),
 
-            // 2. Menu List
+            // ================= MENU =================
             Expanded(
               child: ListView(
                 padding: EdgeInsets.zero,
                 children: [
-                  // Home
                   _buildMenuItem(
                     context,
                     Icons.home_outlined,
                     'Home',
-                    onTap: () => Navigator.pop(context),
-                  ),
-                  const Divider(
-                    height: 1,
-                    color: Color(0xFFCCCCCC),
-                    indent: 15,
-                    endIndent: 15,
+                    onTap: () {
+                      Navigator.pushAndRemoveUntil(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const LecturerDashboard(),
+                        ),
+                        (route) => false,
+                      );
+                    },
                   ),
 
-                  // Approval Course Registration
+                  const Divider(),
+
                   _buildMenuItem(
                     context,
                     Icons.menu_book_outlined,
                     'Approval Course Registration',
                     onTap: () {
+                      Navigator.pop(context); // Close Drawer
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                          builder: (context) => const ApprovalReg(),
-                        ),
+                        MaterialPageRoute(builder: (_) => const ApprovalReg()),
                       );
                     },
                   ),
-                  const Divider(
-                    height: 1,
-                    color: Color(0xFFCCCCCC),
-                    indent: 15,
-                    endIndent: 15,
-                  ),
 
-                  // Subject
+                  const Divider(),
+
+                  // ================= SUBJECT =================
                   _buildMenuItem(
                     context,
                     Icons.bookmark_border,
                     'Subject',
-                    onTap: () => Navigator.pop(context),
-                  ),
-                  const Divider(
-                    height: 1,
-                    color: Color(0xFFCCCCCC),
-                    indent: 15,
-                    endIndent: 15,
+                    onTap: () {
+                      Navigator.pop(context); // tutup drawer dulu
+
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const LecturerDashboard(),
+                        ),
+                      );
+                    },
                   ),
 
-                  // My Co-Q (ExpansionTile)
+                  const Divider(),
+
                   _buildDropdownMenu(
                     icon: Icons.military_tech_outlined,
                     title: 'My Co-Q',
@@ -97,53 +98,41 @@ class LecturerDrawer extends StatelessWidget {
                       _buildSubMenuItem(context, 'View Booking List'),
                     ],
                   ),
-                  const Divider(
-                    height: 1,
-                    color: Color(0xFFCCCCCC),
-                    indent: 15,
-                    endIndent: 15,
-                  ),
 
-                  // Attendance (Manage Attendance)
+                  const Divider(),
+
                   _buildDropdownMenu(
                     icon: Icons.people_outline,
                     title: 'Attendance',
-                    initiallyExpanded:
-                        true, // Shows Manage Attendance by default
+                    initiallyExpanded: true,
                     children: [
                       _buildSubMenuItem(
                         context,
                         'Manage Attendance',
-                        onTap: () {
-                          Navigator.pop(context);
-                          // Navigator.push logic for Manage Attendance goes here
-                        },
+                        onTap: () => Navigator.pop(context),
                       ),
                     ],
-                  ),
-                  const Divider(
-                    height: 1,
-                    color: Color(0xFFCCCCCC),
-                    indent: 15,
-                    endIndent: 15,
                   ),
                 ],
               ),
             ),
-            const Divider(height: 1, color: Color(0xFFCCCCCC)),
+
+            const Divider(),
+
+            // ================= LOGOUT =================
             ListTile(
               leading: const Icon(Icons.logout, color: Colors.red),
               title: const Text(
                 'Logout',
                 style: TextStyle(
                   color: Colors.red,
-                  fontSize: 16,
                   fontWeight: FontWeight.w600,
                 ),
               ),
               onTap: () async {
                 final navigator = Navigator.of(context);
                 await AuthService().logout();
+
                 navigator.pushAndRemoveUntil(
                   MaterialPageRoute(builder: (_) => const LoginScreen()),
                   (route) => false,
@@ -157,8 +146,7 @@ class LecturerDrawer extends StatelessWidget {
     );
   }
 
-  // --- Helper Widgets ---
-
+  // ================= HELPERS =================
   Widget _buildMenuItem(
     BuildContext context,
     IconData icon,
@@ -166,15 +154,8 @@ class LecturerDrawer extends StatelessWidget {
     required VoidCallback onTap,
   }) {
     return ListTile(
-      leading: Icon(icon, color: Colors.black, size: 28),
-      title: Text(
-        title,
-        style: const TextStyle(
-          color: Colors.black,
-          fontSize: 16,
-          fontWeight: FontWeight.w400,
-        ),
-      ),
+      leading: Icon(icon, color: Colors.black),
+      title: Text(title),
       onTap: onTap,
     );
   }
@@ -185,23 +166,11 @@ class LecturerDrawer extends StatelessWidget {
     required List<Widget> children,
     bool initiallyExpanded = false,
   }) {
-    return Theme(
-      data: ThemeData().copyWith(dividerColor: Colors.transparent),
-      child: ExpansionTile(
-        initiallyExpanded: initiallyExpanded,
-        leading: Icon(icon, color: Colors.black, size: 28),
-        title: Text(
-          title,
-          style: const TextStyle(
-            color: Colors.black,
-            fontSize: 16,
-            fontWeight: FontWeight.w400,
-          ),
-        ),
-        trailing: const Icon(Icons.keyboard_arrow_right, color: Colors.black),
-        childrenPadding: const EdgeInsets.only(left: 45),
-        children: children,
-      ),
+    return ExpansionTile(
+      initiallyExpanded: initiallyExpanded,
+      leading: Icon(icon, color: Colors.black),
+      title: Text(title),
+      children: children,
     );
   }
 
@@ -210,17 +179,9 @@ class LecturerDrawer extends StatelessWidget {
     String title, {
     VoidCallback? onTap,
   }) {
-    return Column(
-      children: [
-        const Divider(height: 1, color: Color(0xFFE0E0E0)),
-        ListTile(
-          title: Text(
-            title,
-            style: const TextStyle(color: Colors.black, fontSize: 14),
-          ),
-          onTap: onTap ?? () => Navigator.pop(context),
-        ),
-      ],
+    return ListTile(
+      title: Text(title),
+      onTap: onTap ?? () => Navigator.pop(context),
     );
   }
 }

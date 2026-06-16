@@ -4,6 +4,7 @@ import 'package:sams/Domain/module_coq.dart';
 import 'create_module_coq.dart';
 import 'edit_coq.dart';
 import 'delete_coq.dart';
+import 'package:sams/screen/Manage_subject_coQ_activity/PusatAdab/coq_page.dart';
 
 class ListCoQ extends StatelessWidget {
   const ListCoQ({super.key});
@@ -59,76 +60,87 @@ class ListCoQ extends StatelessWidget {
             itemCount: snapshot.data!.docs.length,
             itemBuilder: (context, index) {
               var doc = snapshot.data!.docs[index];
-              var data = doc.data() as Map<String, dynamic>;
 
-              return Container(
-                margin: const EdgeInsets.only(bottom: 15),
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      data['activity_name'] ?? 'No Name',
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
+              // ✅ convert to domain model
+              ModuleCoQ coq = ModuleCoQ.fromFirebase(
+                doc.data() as Map<String, dynamic>,
+              );
+
+              return InkWell(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CoQPage(
+                        coqId: coq.coqId,
+                        activityName: coq.activityName,
+                        location: coq.location,
+                        lecturerName: coq.lecturerName,
+                        bookingQuota: coq.bookingQuota,
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    _buildInfoRow('Co-Q ID', ' : ${data['coq_id'] ?? doc.id}'),
-                    _buildInfoRow(
-                      'Quota',
-                      ' : ${data['booking_quota'] ?? 0} slots',
-                    ),
-                    _buildInfoRow(
-                      'Location',
-                      ' : ${data['location'] ?? 'Not Set'}',
-                    ),
-                    _buildInfoRow(
-                      'Advisor',
-                      ' : ${data['lecturer_name'] ?? 'No Advisor'}',
-                    ),
-                    const SizedBox(height: 15),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        _buildActionButton('Edit', Colors.green.shade400, () {
-                          ModuleCoQ currentCoQ = ModuleCoQ(
-                            coqId: data['coq_id'] ?? doc.id,
-                            activityName: data['activity_name'] ?? 'No Name',
-                            bookingQuota: data['booking_quota'] ?? 0,
-                            location: data['location'] ?? '',
-                            lecturerName: data['lecturer_name'] ?? 'No Advisor',
-                          );
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => EditCoQ(coq: currentCoQ),
-                            ),
-                          );
-                        }),
-                        const SizedBox(width: 10),
-                        _buildActionButton('Delete', Colors.red.shade400, () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => DeleteCoQ(
-                                coqId: data['coq_id'] ?? doc.id,
-                                activityName:
-                                    data['activity_name'] ?? 'No Name',
+                  );
+                },
+
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 15),
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        coq.activityName,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+
+                      const SizedBox(height: 10),
+
+                      _buildInfoRow('Co-Q ID', ' : ${coq.coqId}'),
+                      _buildInfoRow('Quota', ' : ${coq.bookingQuota} slots'),
+                      _buildInfoRow('Location', ' : ${coq.location}'),
+                      _buildInfoRow('Advisor', ' : ${coq.lecturerName}'),
+
+                      const SizedBox(height: 15),
+
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          _buildActionButton('Edit', Colors.green.shade400, () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => EditCoQ(coq: coq),
                               ),
-                            ),
-                          );
-                        }),
-                      ],
-                    ),
-                  ],
+                            );
+                          }),
+
+                          const SizedBox(width: 10),
+
+                          _buildActionButton('Delete', Colors.red.shade400, () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => DeleteCoQ(
+                                  coqId: coq.coqId,
+                                  activityName: coq.activityName,
+                                ),
+                              ),
+                            );
+                          }),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               );
             },

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
+import 'package:flutter/foundation.dart';
 // Import fail login
 
 import 'package:sams/auth/login_screen.dart';
@@ -27,8 +28,10 @@ void main() async {
   );
 
   // 3. Initialise Stripe with the publishable key.
-  Stripe.publishableKey = StripeConfig.publishableKey;
-  await Stripe.instance.applySettings();
+  if (!kIsWeb) {
+    Stripe.publishableKey = StripeConfig.publishableKey;
+    await Stripe.instance.applySettings();
+  }
 
   runApp(const MyApp());
 }

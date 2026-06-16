@@ -5,7 +5,7 @@ import 'package:moon_design/moon_design.dart';
 import 'package:sams/screen/Fee/Student/FeePage.dart' show SamsHeader;
 
 import 'StudentRecordPage.dart';
-import 'OverdueStudentPage.dart';
+import 'package:sams/screen/Fee/Treasury/OverdueStudent_Page.dart';
 
 const Color kTreasuryGreen = Color(0xFF52DE76);
 
@@ -46,7 +46,7 @@ class TreasuryController {
   /// Fetches stats + student list in one pass over the fees collection.
   /// For very large datasets (>10K students), prefer aggregation queries.
   static Future<({DashboardStats stats, List<StudentRow> students})>
-      getDashboardStats() async {
+  getDashboardStats() async {
     final db = FirebaseFirestore.instance;
 
     // Pull all fee records (each represents one student-semester).
@@ -71,11 +71,13 @@ class TreasuryController {
           unpaid++;
       }
 
-      rows.add(StudentRow(
-        studentId: (data['student_id'] ?? '').toString(),
-        fullName: (data['student_name'] ?? '').toString(),
-        paymentStatus: status,
-      ));
+      rows.add(
+        StudentRow(
+          studentId: (data['student_id'] ?? '').toString(),
+          fullName: (data['student_name'] ?? '').toString(),
+          paymentStatus: status,
+        ),
+      );
     }
 
     // Backfill missing names from the students collection if needed.
@@ -151,26 +153,30 @@ class _TreasuryDashboardPageState extends State<TreasuryDashboardPage> {
     final q = _searchQuery.trim().toLowerCase();
     if (q.isEmpty) return all;
     return all
-        .where((s) =>
-            s.studentId.toLowerCase().contains(q) ||
-            s.fullName.toLowerCase().contains(q))
+        .where(
+          (s) =>
+              s.studentId.toLowerCase().contains(q) ||
+              s.fullName.toLowerCase().contains(q),
+        )
         .toList();
   }
 
   // navigateToStudentRecord() — push individual record view
   void navigateToStudentRecord(String studentId) {
     Navigator.of(context)
-        .push(MaterialPageRoute(
-          builder: (_) => StudentRecordPage(studentId: studentId),
-        ))
+        .push(
+          MaterialPageRoute(
+            builder: (_) => StudentRecordPage(studentId: studentId),
+          ),
+        )
         // refresh when coming back since block/unblock may have changed state
         .then((_) => loadDashboardStats());
   }
 
   void _openOverdueList() {
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => const OverdueStudentPage(),
-    ));
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const OverdueStudentPage()));
   }
 
   @override
@@ -183,24 +189,26 @@ class _TreasuryDashboardPageState extends State<TreasuryDashboardPage> {
           children: [
             const SamsHeader(color: kTreasuryGreen),
             Expanded(
-              child: FutureBuilder<
-                  ({DashboardStats stats, List<StudentRow> students})>(
-                future: _future,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState != ConnectionState.done) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (snapshot.hasError || !snapshot.hasData) {
-                    return Center(
-                      child: Text('Failed to load: ${snapshot.error}'),
-                    );
-                  }
-                  final stats = snapshot.data!.stats;
-                  final all = snapshot.data!.students;
-                  final filtered = searchStudent(all);
-                  return _buildBody(stats, filtered);
-                },
-              ),
+              child:
+                  FutureBuilder<
+                    ({DashboardStats stats, List<StudentRow> students})
+                  >(
+                    future: _future,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState != ConnectionState.done) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      if (snapshot.hasError || !snapshot.hasData) {
+                        return Center(
+                          child: Text('Failed to load: ${snapshot.error}'),
+                        );
+                      }
+                      final stats = snapshot.data!.stats;
+                      final all = snapshot.data!.students;
+                      final filtered = searchStudent(all);
+                      return _buildBody(stats, filtered);
+                    },
+                  ),
             ),
           ],
         ),
@@ -233,11 +241,17 @@ class _TreasuryDashboardPageState extends State<TreasuryDashboardPage> {
           // Stats cards
           Row(
             children: [
-              Expanded(child: _StatCard(value: stats.totalStudents, label: 'Total')),
+              Expanded(
+                child: _StatCard(value: stats.totalStudents, label: 'Total'),
+              ),
               const SizedBox(width: 8),
-              Expanded(child: _StatCard(value: stats.paidStudents, label: 'Paid')),
+              Expanded(
+                child: _StatCard(value: stats.paidStudents, label: 'Paid'),
+              ),
               const SizedBox(width: 8),
-              Expanded(child: _StatCard(value: stats.unpaidStudents, label: 'Unpaid')),
+              Expanded(
+                child: _StatCard(value: stats.unpaidStudents, label: 'Unpaid'),
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -251,7 +265,11 @@ class _TreasuryDashboardPageState extends State<TreasuryDashboardPage> {
                 alignment: Alignment.centerLeft,
                 minimumSize: const Size(0, 32),
               ),
-              icon: const Icon(Icons.warning_amber, size: 16, color: Colors.redAccent),
+              icon: const Icon(
+                Icons.warning_amber,
+                size: 16,
+                color: Colors.redAccent,
+              ),
               label: Text(
                 'View ${stats.overdueStudents} overdue students',
                 style: const TextStyle(
@@ -271,8 +289,10 @@ class _TreasuryDashboardPageState extends State<TreasuryDashboardPage> {
               hintText: 'Search ID',
               prefixIcon: const Icon(Icons.search, size: 18),
               isDense: true,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(20),
                 borderSide: const BorderSide(color: Color(0xFFCCCCCC)),
@@ -378,10 +398,7 @@ class _StudentTile extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     row.studentId,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: Colors.black54,
-                    ),
+                    style: const TextStyle(fontSize: 11, color: Colors.black54),
                   ),
                 ],
               ),

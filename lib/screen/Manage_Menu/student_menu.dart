@@ -6,6 +6,8 @@ import '../Manage_subject_and_Coq_registration/student/booked_coq.dart';
 import '../Fee/Student/FeePage.dart';
 import 'package:sams/auth/auth_service.dart';
 import 'package:sams/auth/login_screen.dart';
+import '../Manage_subject_coQ_activity/Student/student_dashboard.dart';
+import '../Manage_subject_coQ_activity/Student/module_booked_page.dart';
 
 class StudentDrawer extends StatelessWidget {
   final String studentId;
@@ -20,7 +22,7 @@ class StudentDrawer extends StatelessWidget {
         elevation: 10,
         child: Column(
           children: [
-            // Header SAMS
+            // Header
             Container(
               height: 100,
               width: double.infinity,
@@ -33,36 +35,29 @@ class StudentDrawer extends StatelessWidget {
                   color: Colors.black,
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  letterSpacing: 1.2,
                 ),
               ),
             ),
 
-            // Senarai Menu
+            // MENU LIST
             Expanded(
               child: ListView(
                 padding: EdgeInsets.zero,
                 children: [
+                  // HOME
                   _buildMenuItem(
                     context,
                     Icons.home_outlined,
                     'Home',
                     onTap: () {
-                      Navigator.pop(context); // close the drawer
-                      // Return to the dashboard (the first route after login),
-                      // popping any pages opened on top of it. If already on
-                      // the dashboard this is a no-op.
-                      Navigator.of(context)
-                          .popUntil((route) => route.isFirst);
+                      Navigator.pop(context);
+                      Navigator.of(context).popUntil((route) => route.isFirst);
                     },
                   ),
-                  const Divider(
-                    height: 1,
-                    color: Color(0xFFCCCCCC),
-                    indent: 15,
-                    endIndent: 15,
-                  ),
 
+                  const Divider(),
+
+                  // OPEN REG
                   _buildMenuItem(
                     context,
                     Icons.book_outlined,
@@ -78,41 +73,41 @@ class StudentDrawer extends StatelessWidget {
                       );
                     },
                   ),
-                  const Divider(
-                    height: 1,
-                    color: Color(0xFFCCCCCC),
-                    indent: 15,
-                    endIndent: 15,
-                  ),
 
+                  const Divider(),
+
+                  // SUBJECT
                   _buildMenuItem(
                     context,
                     Icons.bookmark_border,
                     'Subject',
-                    onTap: () => Navigator.pop(context),
-                  ),
-                  const Divider(
-                    height: 1,
-                    color: Color(0xFFCCCCCC),
-                    indent: 15,
-                    endIndent: 15,
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const StudentDashboard(),
+                        ),
+                      );
+                    },
                   ),
 
-                  // --- Dropdown My Co-Q ---
+                  const Divider(),
+
+                  // MY CO-Q
                   _buildDropdownMenu(
                     icon: Icons.military_tech_outlined,
                     title: 'My Co-Q',
                     children: [
-                      // Updated with Navigation for Booking Slot
                       _buildSubMenuItem(
                         context,
                         'Booking Slot',
                         onTap: () {
-                          Navigator.pop(context); // Close Drawer
+                          Navigator.pop(context);
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => const BookedCoqScreen(),
+                              builder: (_) => const BookedCoqScreen(),
                             ),
                           );
                         },
@@ -121,39 +116,43 @@ class StudentDrawer extends StatelessWidget {
                         context,
                         'View Booking List',
                         onTap: () {
-                          Navigator.pop(context); // Close Drawer
+                          Navigator.pop(context);
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => const CoqListScreen(),
+                              builder: (_) => const CoqListScreen(),
                             ),
                           );
                         },
                       ),
-                      _buildSubMenuItem(context, 'Credit Claim Status'),
+                      _buildSubMenuItem(
+                        context,
+                        'Credit Claim Status',
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const ModuleBookedPage(),
+                            ),
+                          );
+                        },
+                      ),
                     ],
                   ),
-                  const Divider(
-                    height: 1,
-                    color: Color(0xFFCCCCCC),
-                    indent: 15,
-                    endIndent: 15,
-                  ),
 
-                  // Dropdown Attendance
+                  const Divider(),
+
+                  // ATTENDANCE
                   _buildDropdownMenu(
                     icon: Icons.people_outline,
                     title: 'Attendance',
                     children: [_buildSubMenuItem(context, 'Check In')],
                   ),
-                  const Divider(
-                    height: 1,
-                    color: Color(0xFFCCCCCC),
-                    indent: 15,
-                    endIndent: 15,
-                  ),
 
-                  // Dropdown Financial Details
+                  const Divider(),
+
+                  // FINANCIAL
                   _buildDropdownMenu(
                     icon: Icons.attach_money,
                     title: 'Financial Details',
@@ -162,48 +161,44 @@ class StudentDrawer extends StatelessWidget {
                         context,
                         'Fee Statement',
                         onTap: () {
-                          Navigator.pop(context); // Close Drawer
+                          Navigator.pop(context);
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) =>
-                                  FeePage(studentId: studentId),
+                              builder: (_) => FeePage(studentId: studentId),
                             ),
                           );
                         },
                       ),
                     ],
                   ),
-                  const Divider(
-                    height: 1,
-                    color: Color(0xFFCCCCCC),
-                    indent: 15,
-                    endIndent: 15,
+
+                  const Divider(),
+
+                  // LOGOUT
+                  ListTile(
+                    leading: const Icon(Icons.logout, color: Colors.red),
+                    title: const Text(
+                      'Logout',
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    onTap: () async {
+                      final navigator = Navigator.of(context);
+                      await AuthService().logout();
+                      navigator.pushAndRemoveUntil(
+                        MaterialPageRoute(builder: (_) => const LoginScreen()),
+                        (route) => false,
+                      );
+                    },
                   ),
+
+                  const SizedBox(height: 12),
                 ],
               ),
             ),
-            const Divider(height: 1, color: Color(0xFFCCCCCC)),
-            ListTile(
-              leading: const Icon(Icons.logout, color: Colors.red),
-              title: const Text(
-                'Logout',
-                style: TextStyle(
-                  color: Colors.red,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              onTap: () async {
-                final navigator = Navigator.of(context);
-                await AuthService().logout();
-                navigator.pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                  (route) => false,
-                );
-              },
-            ),
-            const SizedBox(height: 12),
           ],
         ),
       ),
